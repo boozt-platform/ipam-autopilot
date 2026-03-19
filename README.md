@@ -15,6 +15,70 @@ IPAM Autopilot consists of two parts, a [backend service](./container) that prov
 
 The provider uses application default credentials to authenticate against the backend. Alternatively you can directly provide an identity token via the `GCP_IDENTITY_TOKEN` environment variable to access the Cloud Run instance, the audience for the identity token should be the domain of the Cloud Run service.
 
+## Local development
+
+### Prerequisites
+- Docker + Docker Compose
+- Go 1.26
+- Terraform or OpenTofu
+
+Alternatively, open the repo in VS Code — it includes a [devcontainer](./.devcontainer) with all tools pre-installed (Go 1.26, golangci-lint, docker-in-docker).
+
+### Start the stack
+
+```bash
+docker compose up --build -d   # MySQL + API (localhost:8080) + Jaeger (localhost:16686)
+```
+
+### Common tasks
+
+```bash
+make test                # unit tests (container + provider)
+make test-integration    # integration tests via testcontainers (requires Docker)
+make lint                # golangci-lint
+make fmt                 # gofmt
+
+make dev-apply           # build provider binary + terraform apply against docker-compose
+make dev-destroy         # terraform destroy local dev resources
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_USER` | | MySQL username |
+| `DATABASE_PASSWORD` | | MySQL password |
+| `DATABASE_HOST` | | MySQL host:port |
+| `DATABASE_NAME` | | MySQL database name |
+| `DATABASE_NET` | `tcp` | MySQL network |
+| `DISABLE_DATABASE_MIGRATION` | `FALSE` | Set `TRUE` to skip auto-migration on startup |
+| `LOG_FORMAT` | `json` | Set `text` for human-readable logs |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | | OTLP gRPC endpoint for tracing (e.g. `jaeger:4317`) |
+| `PORT` | `8080` | HTTP listen port |
+
+---
+
+## API
+
+All IPAM endpoints are available under `/api/v1`:
+
+```
+POST   /api/v1/ranges
+GET    /api/v1/ranges
+GET    /api/v1/ranges/:id
+DELETE /api/v1/ranges/:id
+
+POST   /api/v1/domains
+GET    /api/v1/domains
+GET    /api/v1/domains/:id
+PUT    /api/v1/domains/:id
+DELETE /api/v1/domains/:id
+```
+
+Legacy paths (`/ranges`, `/domains`) are kept for Terraform provider backward compatibility.
+
+---
+
 ## IPAM Autopilot Backend
 The [infrastructure](./infrastructure) folder contains a sample Terraform setup with which the IPAM Autopilot backend can be deployed to CloudRun. The required APIs are created during the deployment. The deployment instructions also provision a small CloudSQL instance as well. The container is build as part of the deployment. The `Dockerfile` containing the build instructions is at the top level, since the container needs files that are generated during the infrastructure deployment.
 
