@@ -23,7 +23,8 @@ linters:
         - (*go.opentelemetry.io/otel/sdk/trace.TracerProvider).Shutdown
 
 issues:
-  exclude-rules:
-    # Test files — relaxed errcheck
-    - path: "_test\\.go"
-      linters: [errcheck]
+  exclusions:
+    rules:
+      # Test files — relaxed errcheck
+      - path: "_test\\.go"
+        linters: [errcheck]
