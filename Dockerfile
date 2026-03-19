@@ -1,4 +1,5 @@
 # Copyright 2021 Google LLC
+# Copyright 2026 Boozt Fashion AB (modifications)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.16-buster as build
+FROM golang:1.26-bookworm AS build
 
 WORKDIR /go/src/app
-ADD ./container /go/src/app
+COPY ./container /go/src/app
 
-RUN go build -tags docker -o /go/bin/app *.go
+RUN CGO_ENABLED=0 go build -o /go/bin/app .
 
-FROM gcr.io/distroless/base-debian11
+FROM gcr.io/distroless/static-debian12
 COPY ./container/migrations /migrations
 COPY ./infrastructure/output /terraform
 COPY --from=build /go/bin/app /
-CMD ["/app"] 
+CMD ["/app"]
