@@ -292,8 +292,8 @@ Below is a Terraform example for using IPAM Autopilot
 terraform {
   required_providers {
     ipam = {
-      version = "0.1"
-      source = "<cloud run hostname>/ipam-autopilot/ipam"
+      source  = "boozt-platform/ipam-autopilot"
+      version = "~> 1.0"
     }
   }
 }
