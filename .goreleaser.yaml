@@ -1,0 +1,54 @@
+# Copyright 2026 Boozt Fashion AB
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+---
+builds:
+  - id: provider
+    dir: provider
+    binary: terraform-provider-ipam-autopilot
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+  - id: container
+    dir: container
+    binary: ipam-autopilot
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: provider-archive
+    builds:
+      - provider
+    name_template: "terraform-provider-ipam-autopilot_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: zip
+
+  - id: container-archive
+    builds:
+      - container
+    name_template: "ipam-autopilot_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+
+checksum:
+  name_template: "terraform-provider-ipam-autopilot_{{ .Version }}_SHA256SUMS"
+
+snapshot:
+  name_template: "{{ .Tag }}-next"

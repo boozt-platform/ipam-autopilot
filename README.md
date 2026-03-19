@@ -1,4 +1,10 @@
 # IPAM Autopilot
+
+> **Fork notice:** This is a Boozt Fashion AB fork of
+> [GoogleCloudPlatform/professional-services](https://github.com/GoogleCloudPlatform/professional-services/tree/main/tools/ipam-autopilot),
+> maintained at [boozt-platform/ipam-autopilot](https://github.com/boozt-platform/ipam-autopilot).
+> See [NOTICE](./NOTICE) and [CHANGES.md](./CHANGES.md) for details.
+
 IPAM Autopilot is a simple Docker Container and Terraform provider that allows you to automatically manage IP ranges for GCP VPCs.
 
 It connects to Cloud Asset Inventory to also retrieve already existing subnets and ranges, in order to allow for a mixed usage.
