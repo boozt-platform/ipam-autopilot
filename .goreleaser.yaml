@@ -50,5 +50,16 @@ archives:
 checksum:
   name_template: "terraform-provider-ipam-autopilot_{{ .Version }}_SHA256SUMS"
 
+signs:
+  - artifacts: checksum
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+
 snapshot:
   name_template: "{{ .Tag }}-next"
