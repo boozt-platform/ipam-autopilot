@@ -103,6 +103,13 @@ func DeleteRange(c *fiber.Ctx) error {
 			"message": fmt.Sprintf("%v", err),
 		})
 	}
+	rang, err := GetRangeFromDB(id)
+	if err != nil {
+		return c.Status(503).JSON(&fiber.Map{
+			"success": false,
+			"message": fmt.Sprintf("%v", err),
+		})
+	}
 	err = DeleteRangeFromDb(id)
 	if err != nil {
 		return c.Status(503).JSON(&fiber.Map{
@@ -110,10 +117,25 @@ func DeleteRange(c *fiber.Ctx) error {
 			"message": fmt.Sprintf("%v", err),
 		})
 	}
-
+	writeAuditLog(ActionDelete, ResourceRange, int(id), rang.Name, map[string]string{"cidr": rang.Cidr})
 	return c.Status(200).JSON(&fiber.Map{
 		"success": true,
 	})
+}
+
+func GetAuditLogs(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "100"))
+	logs, err := GetAuditLogsFromDB(limit)
+	if err != nil {
+		return c.Status(503).JSON(&fiber.Map{
+			"success": false,
+			"message": fmt.Sprintf("%v", err),
+		})
+	}
+	if logs == nil {
+		logs = []AuditLog{}
+	}
+	return c.Status(200).JSON(logs)
 }
 
 func CreateNewRange(c *fiber.Ctx) error {
@@ -254,6 +276,7 @@ func directInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDomain *Routi
 		log.Fatal(err)
 	}
 
+	writeAuditLog(ActionCreate, ResourceRange, int(id), p.Name, map[string]string{"cidr": p.Cidr})
 	return c.Status(200).JSON(&fiber.Map{
 		"id":     id,
 		"name":   p.Name,
@@ -366,6 +389,7 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 	}
 
 	allocatedCidr := fmt.Sprintf("%s/%d", subnet.IP.To4().String(), subnetOnes)
+	writeAuditLog(ActionCreate, ResourceRange, int(id), p.Name, map[string]string{"cidr": allocatedCidr})
 	return c.Status(200).JSON(&fiber.Map{
 		"id":     id,
 		"name":   p.Name,
@@ -435,6 +459,13 @@ func DeleteRoutingDomain(c *fiber.Ctx) error {
 			"message": fmt.Sprintf("%v", err),
 		})
 	}
+	domain, err := GetRoutingDomainFromDB(id)
+	if err != nil {
+		return c.Status(503).JSON(&fiber.Map{
+			"success": false,
+			"message": fmt.Sprintf("%v", err),
+		})
+	}
 	err = DeleteRoutingDomainFromDB(id)
 	if err != nil {
 		return c.Status(503).JSON(&fiber.Map{
@@ -442,7 +473,7 @@ func DeleteRoutingDomain(c *fiber.Ctx) error {
 			"message": fmt.Sprintf("%v", err),
 		})
 	}
-
+	writeAuditLog(ActionDelete, ResourceDomain, int(id), domain.Name, nil)
 	return c.Status(200).JSON(&fiber.Map{})
 }
 
@@ -512,7 +543,7 @@ func CreateRoutingDomain(c *fiber.Ctx) error {
 			"message": fmt.Sprintf("Unable to create new routing domain %v", err),
 		})
 	}
-
+	writeAuditLog(ActionCreate, ResourceDomain, int(id), p.Name, nil)
 	return c.Status(200).JSON(&fiber.Map{
 		"id": id,
 	})

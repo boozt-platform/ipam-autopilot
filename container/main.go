@@ -59,6 +59,8 @@ func newApp(database *sql.DB) *fiber.App {
 	v1.Post("/domains", CreateRoutingDomain)
 	v1.Delete("/domains/:id", DeleteRoutingDomain)
 
+	v1.Get("/audit", GetAuditLogs)
+
 	// Legacy routes — kept for Terraform provider backward compatibility
 	// TODO: remove after provider is updated to use /api/v1
 	app.Post("/ranges", CreateNewRange)

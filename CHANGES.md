@@ -50,10 +50,14 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - **Added `labels` validation** — `POST /ranges` returns 400 if any label key or value is empty
 - **Expanded POST /ranges response** — now returns `id`, `name`, `cidr`, and `labels`
 
+## Phase 4: Audit log
+
+- **Added audit log** — new `audit_logs` table (migration `1773964900_create_audit_logs_table`);
+  `GET /api/v1/audit?limit=N` returns last N events (default 100, max 1000); events written on
+  every create/delete of ranges and routing domains, including `cidr` in detail for ranges
+
 ## Planned changes (not yet implemented)
 
 See skill documentation for full roadmap:
-- `ipam_ip_range` data source for Terraform provider
-- Audit log endpoint
 - Provider registry migration to registry.opentofu.org
 - Bulk import endpoint

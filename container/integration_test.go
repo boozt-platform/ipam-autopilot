@@ -458,6 +458,82 @@ func TestCreateRange_LabelValueTooLong(t *testing.T) {
 	assert.Equal(t, 400, status)
 }
 
+// --- Audit log tests ---
+
+func TestAuditLog_CreateAndDeleteRange(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := newApp(database)
+
+	domainID, _ := setupDomainAndParent(t, app)
+
+	_, createBody := doRequest(app, "POST", "/api/v1/ranges", map[string]interface{}{
+		"name":   "audited-range",
+		"cidr":   "10.30.0.0/24",
+		"domain": fmt.Sprintf("%d", domainID),
+	})
+	var created map[string]interface{}
+	require.NoError(t, json.Unmarshal(createBody, &created))
+	id := int(created["id"].(float64))
+
+	doRequest(app, "DELETE", fmt.Sprintf("/api/v1/ranges/%d", id), nil)
+
+	status, body := doRequestWithStatus(app, "GET", "/api/v1/audit", nil)
+	assert.Equal(t, 200, status)
+
+	var logs []map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &logs))
+
+	// Most recent is the delete
+	assert.GreaterOrEqual(t, len(logs), 2)
+	assert.Equal(t, "delete", logs[0]["action"])
+	assert.Equal(t, "range", logs[0]["resource_type"])
+	assert.Equal(t, "audited-range", logs[0]["resource_name"])
+}
+
+func TestAuditLog_CreateDomain(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := newApp(database)
+
+	doRequest(app, "POST", "/api/v1/domains", map[string]interface{}{
+		"name": "audit-domain",
+		"vpcs": []string{},
+	})
+
+	status, body := doRequestWithStatus(app, "GET", "/api/v1/audit", nil)
+	assert.Equal(t, 200, status)
+
+	var logs []map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &logs))
+	require.NotEmpty(t, logs)
+	assert.Equal(t, "create", logs[0]["action"])
+	assert.Equal(t, "domain", logs[0]["resource_type"])
+	assert.Equal(t, "audit-domain", logs[0]["resource_name"])
+}
+
+func TestAuditLog_LimitParam(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := newApp(database)
+
+	domainID, _ := setupDomainAndParent(t, app)
+	for i := range 5 {
+		doRequest(app, "POST", "/api/v1/ranges", map[string]interface{}{
+			"name":   fmt.Sprintf("range-%d", i),
+			"cidr":   fmt.Sprintf("10.40.%d.0/24", i),
+			"domain": fmt.Sprintf("%d", domainID),
+		})
+	}
+
+	status, body := doRequestWithStatus(app, "GET", "/api/v1/audit?limit=2", nil)
+	assert.Equal(t, 200, status)
+
+	var logs []map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &logs))
+	assert.Len(t, logs, 2)
+}
+
 // --- Legacy route backward compat ---
 
 func TestLegacyRoutesStillWork(t *testing.T) {
