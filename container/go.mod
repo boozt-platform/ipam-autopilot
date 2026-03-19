@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/professional-services/ipam-autopilot
+module github.com/boozt-platform/ipam-autopilot/container
 
 go 1.26
 

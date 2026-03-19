@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/professional-services/terraform-provider-ipam-autopilot
+module github.com/boozt-platform/ipam-autopilot/provider
 
 go 1.26
 
