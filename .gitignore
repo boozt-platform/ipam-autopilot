@@ -63,6 +63,7 @@ override.tf.json
 terraform-provider-simple-ipam
 test.sh
 *.env
+examples/local-dev/dev.tfrc
 bin/
 terraform/
 public.key#
