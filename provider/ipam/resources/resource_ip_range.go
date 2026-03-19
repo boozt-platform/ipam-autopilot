@@ -227,8 +227,8 @@ func resourceDelete(d *schema.ResourceData, meta interface{}) error {
 }
 
 func getIdentityToken() (string, error) {
-	if os.Getenv("GCP_IDENTITY_TOKEN") != "" {
-		return os.Getenv("GCP_IDENTITY_TOKEN"), nil
+	if os.Getenv("IPAM_IDENTITY_TOKEN") != "" {
+		return os.Getenv("IPAM_IDENTITY_TOKEN"), nil
 	}
 
 	ctx := context.Background()

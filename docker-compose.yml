@@ -25,12 +25,12 @@ services:
   api:
     build: .
     environment:
-      DATABASE_USER: ipam
-      DATABASE_PASSWORD: ipam
-      DATABASE_HOST: mysql:3306
-      DATABASE_NET: tcp
-      DATABASE_NAME: ipam
-      LOG_FORMAT: text
+      IPAM_DATABASE_USER: ipam
+      IPAM_DATABASE_PASSWORD: ipam
+      IPAM_DATABASE_HOST: mysql:3306
+      IPAM_DATABASE_NET: tcp
+      IPAM_DATABASE_NAME: ipam
+      IPAM_LOG_FORMAT: text
       OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "8080:8080"

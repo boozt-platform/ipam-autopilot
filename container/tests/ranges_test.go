@@ -249,3 +249,90 @@ func TestCreateRange_LabelValueTooLong(t *testing.T) {
 	})
 	assert.Equal(t, 400, status)
 }
+
+func TestImportRanges_Basic(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := server.NewApp(database)
+
+	domainID, _ := setupDomainAndParent(t, app)
+
+	status, body := doRequestWithStatus(app, "POST", "/api/v1/ranges/import", []map[string]interface{}{
+		{"name": "legacy-a", "cidr": "10.50.0.0/24", "domain": fmt.Sprintf("%d", domainID)},
+		{"name": "legacy-b", "cidr": "10.50.1.0/24", "domain": fmt.Sprintf("%d", domainID)},
+	})
+	assert.Equal(t, 200, status)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &result))
+	assert.Equal(t, float64(2), result["imported"])
+	assert.Equal(t, float64(0), result["skipped"])
+	assert.Empty(t, result["errors"])
+}
+
+func TestImportRanges_Idempotent(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := server.NewApp(database)
+
+	domainID, _ := setupDomainAndParent(t, app)
+
+	payload := []map[string]interface{}{
+		{"name": "legacy-c", "cidr": "10.51.0.0/24", "domain": fmt.Sprintf("%d", domainID)},
+	}
+
+	doRequest(app, "POST", "/api/v1/ranges/import", payload)
+
+	status, body := doRequestWithStatus(app, "POST", "/api/v1/ranges/import", payload)
+	assert.Equal(t, 200, status)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &result))
+	assert.Equal(t, float64(0), result["imported"])
+	assert.Equal(t, float64(1), result["skipped"])
+}
+
+func TestImportRanges_WithLabels(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := server.NewApp(database)
+
+	domainID, _ := setupDomainAndParent(t, app)
+
+	status, _ := doRequestWithStatus(app, "POST", "/api/v1/ranges/import", []map[string]interface{}{
+		{
+			"name":   "legacy-d",
+			"cidr":   "10.52.0.0/24",
+			"domain": fmt.Sprintf("%d", domainID),
+			"labels": map[string]string{"env": "prod"},
+		},
+	})
+	assert.Equal(t, 200, status)
+
+	_, listBody := doRequest(app, "GET", "/api/v1/ranges?name=legacy-d", nil)
+	var ranges []map[string]interface{}
+	require.NoError(t, json.Unmarshal(listBody, &ranges))
+	require.Len(t, ranges, 1)
+	labels := ranges[0]["labels"].(map[string]interface{})
+	assert.Equal(t, "prod", labels["env"])
+}
+
+func TestImportRanges_ValidationErrors(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := server.NewApp(database)
+
+	domainID, _ := setupDomainAndParent(t, app)
+
+	status, body := doRequestWithStatus(app, "POST", "/api/v1/ranges/import", []map[string]interface{}{
+		{"name": "", "cidr": "10.53.0.0/24", "domain": fmt.Sprintf("%d", domainID)},
+		{"name": "valid", "cidr": "", "domain": fmt.Sprintf("%d", domainID)},
+		{"name": "ok", "cidr": "10.53.1.0/24", "domain": fmt.Sprintf("%d", domainID)},
+	})
+	assert.Equal(t, 200, status)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &result))
+	assert.Equal(t, float64(1), result["imported"])
+	assert.Len(t, result["errors"].([]interface{}), 2)
+}

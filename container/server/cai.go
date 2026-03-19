@@ -17,33 +17,25 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
-	"reflect"
+	"strings"
 
 	asset "cloud.google.com/go/asset/apiv1"
 	assetpb "cloud.google.com/go/asset/apiv1/assetpb"
 	"google.golang.org/api/iterator"
 )
 
-type CaiSecondaryRange struct {
-	name string
-	cidr string
-}
-type CaiRange struct {
-	name            string
-	id              string
-	network         string
-	cidr            string
-	secondaryRanges []CaiSecondaryRange
+type caiSubnet struct {
+	network string
+	cidr    string
 }
 
-func GetRangesForNetwork(parent string, networks []string) ([]CaiRange, error) {
-	ctx := context.Background()
+// fetchCAISubnets returns all Subnetwork assets under parent (e.g. "organizations/123").
+// It does not filter by VPC — callers use vpcMatches to filter as needed.
+func fetchCAISubnets(ctx context.Context, parent string) ([]caiSubnet, error) {
 	client, err := asset.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	defer client.Close() //nolint:errcheck
 
 	itr := client.ListAssets(ctx, &assetpb.ListAssetsRequest{
@@ -52,54 +44,61 @@ func GetRangesForNetwork(parent string, networks []string) ([]CaiRange, error) {
 		ContentType: assetpb.ContentType_RESOURCE,
 	})
 
-	ranges := make([]CaiRange, 0)
-
-	for asset, err := itr.Next(); err != iterator.Done; asset, err = itr.Next() {
-		if err != nil {
-			log.Fatal(err)
+	var subnets []caiSubnet
+	for {
+		a, err := itr.Next()
+		if err == iterator.Done {
+			break
 		}
-		if containsValue(networks, asset.Resource.Data.Fields["network"].GetStringValue()) {
-			secondaryRanges := make([]CaiSecondaryRange, 0)
-			secondary := asset.Resource.Data.Fields["secondaryIpRanges"].GetListValue().AsSlice()
-			for i := 0; i < len(secondary); i++ {
-				var rangeName string
-				var ipCidrRange string
+		if err != nil {
+			return nil, err
+		}
+		network := a.Resource.Data.Fields["network"].GetStringValue()
+		cidr := a.Resource.Data.Fields["ipCidrRange"].GetStringValue()
+		if network == "" || cidr == "" {
+			continue
+		}
+		subnets = append(subnets, caiSubnet{network: network, cidr: cidr})
 
-				iter := reflect.ValueOf(secondary[i]).MapRange()
-				for iter.Next() {
-					key := iter.Key().Interface()
-					value := iter.Value().Interface()
-					if key == "ipCidrRange" {
-						ipCidrRange = fmt.Sprintf("%s", value)
-					}
-					if key == "rangeName" {
-						rangeName = fmt.Sprintf("%s", value)
-					}
-				}
-				secondaryRanges = append(secondaryRanges, CaiSecondaryRange{
-					name: rangeName,
-					cidr: ipCidrRange,
-				})
+		// Also collect secondary ranges
+		for _, raw := range a.Resource.Data.Fields["secondaryIpRanges"].GetListValue().AsSlice() {
+			m, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
 			}
-			ranges = append(ranges, CaiRange{
-				id:              asset.Resource.Data.Fields["id"].GetStringValue(),
-				name:            asset.Name,
-				network:         asset.Resource.Data.Fields["network"].GetStringValue(),
-				cidr:            asset.Resource.Data.Fields["ipCidrRange"].GetStringValue(),
-				secondaryRanges: secondaryRanges,
-			})
-		} else {
-			log.Printf("Ignoring network %s", asset.Resource.Data.Fields["network"].GetStringValue())
+			if secondaryCidr, ok := m["ipCidrRange"].(string); ok && secondaryCidr != "" {
+				subnets = append(subnets, caiSubnet{network: network, cidr: secondaryCidr})
+			}
 		}
 	}
-	return ranges, nil
+	return subnets, nil
 }
 
-func containsValue(array []string, lookup string) bool {
-	for i := 0; i < len(array); i++ {
-		if lookup == array[i] {
-			return true
+// getLiveCAISubnetsForNetworks fetches subnets directly from the CAI API (no DB)
+// and filters them by the given VPC identifiers. Used when IPAM_CAI_DB_SYNC is not enabled.
+func getLiveCAISubnetsForNetworks(ctx context.Context, orgID string, networks []string) ([]Range, error) {
+	subnets, err := fetchCAISubnets(ctx, fmt.Sprintf("organizations/%s", orgID))
+	if err != nil {
+		return nil, err
+	}
+	var result []Range
+	for _, s := range subnets {
+		for _, vpc := range networks {
+			if vpcMatches(vpc, s.network) {
+				result = append(result, Range{Cidr: s.cidr})
+				break
+			}
 		}
 	}
-	return false
+	return result, nil
+}
+
+// vpcMatches returns true if the storedVpc (from routing domain) matches a CAI network URL.
+// Accepts both full URLs and short forms:
+//
+//	"https://www.googleapis.com/compute/v1/projects/my-proj/global/networks/my-vpc"
+//	"projects/my-proj/global/networks/my-vpc"
+//	"my-vpc"
+func vpcMatches(storedVpc, caiNetworkURL string) bool {
+	return storedVpc == caiNetworkURL || strings.HasSuffix(caiNetworkURL, "/"+storedVpc)
 }

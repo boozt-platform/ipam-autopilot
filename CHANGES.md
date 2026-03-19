@@ -64,6 +64,46 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
   (`domains_test.go`, `ranges_test.go`, `audit_log_test.go`, `legacy_test.go`, `helpers_test.go`);
   unit tests for subnet logic moved to `container/server/subnet_test.go`
 
+## Phase 5: Bulk import + env variable consistency
+
+- **Added `POST /api/v1/ranges/import`** — import pre-existing CIDRs into IPAM without
+  auto-allocation; accepts an array of `{ name, cidr, domain?, parent?, labels? }` items;
+  idempotent: ranges already present in the same domain are silently skipped; returns
+  `{ imported, skipped, errors }` summary; each imported range is written to the audit log;
+  use case: register manually-assigned subnets before enabling IPAM management, then
+  `terraform import` them into Terraform state
+- **Added `IPAM_DISABLE_BULK_IMPORT`** — set `TRUE` to disable the import endpoint (e.g. in
+  production environments where arbitrary CIDR registration is undesirable)
+- **Renamed all env variables to use `IPAM_` prefix** — `DATABASE_USER` →
+  `IPAM_DATABASE_USER`, `CAI_ORG_ID` → `IPAM_CAI_ORG_ID`, `GCP_IDENTITY_TOKEN` →
+  `IPAM_IDENTITY_TOKEN`, etc.; `OTEL_EXPORTER_OTLP_ENDPOINT` kept as-is (OpenTelemetry
+  standard); full list in README
+- **Added CAI integration documentation** — explains VPC scoping per routing domain and
+  how CAI prevents collision with subnets not registered in IPAM
+- **Added bulk import workflow documentation** — step-by-step guide for adopting an
+  existing VPC into IPAM management including `terraform import` steps
+
+## Phase 6: CAI integration refactor
+
+- **Replaced live CAI API call with DB-backed cache** — new `cai_subnets` table
+  (migration `1773939600_create_cai_subnets_table`); allocation reads from DB instead of
+  calling Cloud Asset Inventory on every `POST /ranges`; eliminates ~3000 subnet round-trip
+  on each auto-allocation
+- **Added startup CAI sync + background loop** — on startup (when `IPAM_CAI_ORG_ID` is set)
+  the server runs an initial blocking sync then starts a background goroutine that re-syncs
+  on `IPAM_CAI_SYNC_INTERVAL` (default `5m`); no external scheduler needed
+- **Sync is chunked and transactional** — upserts in batches of 200 per transaction; a
+  failed chunk is retried on the next sync cycle; stale entries (subnets deleted in GCP) are
+  removed after each sync
+- **Fixed `log.Fatal` in CAI iterator** — a CAI API error during iteration now returns an
+  error instead of crashing the server process
+- **Fixed VPC name matching** — routing domains may now store the short VPC name (e.g.
+  `my-vpc`) or the full resource URL; both forms match correctly against CAI network URLs
+- **Added `IPAM_CAI_SYNC_INTERVAL`** — configurable sync interval (Go duration string,
+  default `5m`)
+- **Added CAI integration tests** — mock-free: tests seed `cai_subnets` directly and verify
+  allocation avoids seeded CIDRs; covers short-name matching and VPC isolation
+
 ## Planned changes (not yet implemented)
 
 See skill documentation for full roadmap:

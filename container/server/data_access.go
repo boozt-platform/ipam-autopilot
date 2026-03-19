@@ -259,6 +259,57 @@ func GetRangeByCidrFromDB(tx *sql.Tx, routing_domain_id int, cidr_request string
 	}, nil
 }
 
+// GetCAISubnetsForNetworks returns all CIDRs from the cai_subnets table whose network
+// matches any of the given VPC identifiers. Both full URLs and short names are supported
+// (see vpcMatches).
+func GetCAISubnetsForNetworks(networks []string) ([]Range, error) {
+	rows, err := db.Query("SELECT network, cidr FROM cai_subnets")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var result []Range
+	for rows.Next() {
+		var network, cidrVal string
+		if err := rows.Scan(&network, &cidrVal); err != nil {
+			return nil, err
+		}
+		for _, vpc := range networks {
+			if vpcMatches(vpc, network) {
+				result = append(result, Range{Cidr: cidrVal})
+				break
+			}
+		}
+	}
+	return result, rows.Err()
+}
+
+func rangeExistsByCidrAndDomain(cidrVal string, domainID int) (bool, error) {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM subnets WHERE cidr = ? AND routing_domain_id = ?", cidrVal, domainID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func getDefaultRoutingDomain() (*RoutingDomain, error) {
+	var routing_domain_id int
+	var name string
+	var vpcs sql.NullString
+
+	err := db.QueryRow("SELECT routing_domain_id, name, vpcs FROM routing_domains LIMIT 1").Scan(&routing_domain_id, &name, &vpcs)
+	if err != nil {
+		return nil, err
+	}
+	return &RoutingDomain{
+		Id:   routing_domain_id,
+		Name: name,
+		Vpcs: vpcs.String,
+	}, nil
+}
+
 func DeleteRangeFromDb(id int64) error {
 	_, err := db.Query("DELETE FROM subnets WHERE subnet_id = ?", id)
 

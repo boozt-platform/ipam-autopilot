@@ -21,7 +21,7 @@ import (
 
 func InitLogger() *slog.Logger {
 	var handler slog.Handler
-	if os.Getenv("LOG_FORMAT") == "text" {
+	if os.Getenv("IPAM_LOG_FORMAT") == "text" {
 		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	} else {
 		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})

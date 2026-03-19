@@ -98,7 +98,7 @@ func getSigningUrl(objectName string) (string, error) {
 		return "", err
 	}
 
-	s, err := storageClient.Bucket(os.Getenv("STORAGE_BUCKET")).SignedURL(objectName, &storage.SignedURLOptions{
+	s, err := storageClient.Bucket(os.Getenv("IPAM_STORAGE_BUCKET")).SignedURL(objectName, &storage.SignedURLOptions{
 		Method:  http.MethodGet,
 		Expires: expires,
 	})

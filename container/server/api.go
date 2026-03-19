@@ -48,6 +48,135 @@ type RangeRequest struct {
 	Labels     map[string]string `json:"labels"`
 }
 
+type ImportRangeItem struct {
+	Name   string            `json:"name"`
+	Cidr   string            `json:"cidr"`
+	Domain string            `json:"domain"`
+	Parent string            `json:"parent"`
+	Labels map[string]string `json:"labels"`
+}
+
+type ImportError struct {
+	Name  string `json:"name"`
+	Cidr  string `json:"cidr"`
+	Error string `json:"error"`
+}
+
+type ImportResult struct {
+	Imported int           `json:"imported"`
+	Skipped  int           `json:"skipped"`
+	Errors   []ImportError `json:"errors"`
+}
+
+func ImportRanges(c *fiber.Ctx) error {
+	ctx := context.Background()
+
+	var items []ImportRangeItem
+	if err := c.BodyParser(&items); err != nil {
+		return c.Status(400).JSON(&fiber.Map{
+			"success": false,
+			"message": fmt.Sprintf("Bad format %v", err),
+		})
+	}
+
+	result := ImportResult{Errors: []ImportError{}}
+
+	for _, item := range items {
+		if item.Name == "" {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "name is required"})
+			continue
+		}
+		if len(item.Name) > 255 {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "name must not exceed 255 characters"})
+			continue
+		}
+		if item.Cidr == "" {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "cidr is required"})
+			continue
+		}
+		labelErr := false
+		for k, v := range item.Labels {
+			if k == "" || v == "" {
+				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "label keys and values must not be empty"})
+				labelErr = true
+				break
+			}
+			if len(k) > 63 {
+				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("label key %q must not exceed 63 characters", k)})
+				labelErr = true
+				break
+			}
+			if len(v) > 255 {
+				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("label value for key %q must not exceed 255 characters", k)})
+				labelErr = true
+				break
+			}
+		}
+		if labelErr {
+			continue
+		}
+
+		var routingDomain *RoutingDomain
+		var err error
+		if item.Domain == "" {
+			routingDomain, err = getDefaultRoutingDomain()
+		} else {
+			domainID, parseErr := strconv.ParseInt(item.Domain, 10, 64)
+			if parseErr != nil {
+				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("invalid domain: %v", parseErr)})
+				continue
+			}
+			routingDomain, err = GetRoutingDomainFromDB(domainID)
+		}
+		if err != nil {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("could not resolve domain: %v", err)})
+			continue
+		}
+
+		exists, err := rangeExistsByCidrAndDomain(item.Cidr, routingDomain.Id)
+		if err != nil {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("database error: %v", err)})
+			continue
+		}
+		if exists {
+			result.Skipped++
+			continue
+		}
+
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("database error: %v", err)})
+			continue
+		}
+
+		parentID := int64(-1)
+		if item.Parent != "" {
+			parentID, err = strconv.ParseInt(item.Parent, 10, 64)
+			if err != nil {
+				_ = tx.Rollback()
+				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("invalid parent: %v", err)})
+				continue
+			}
+		}
+
+		id, err := CreateRangeInDb(tx, parentID, routingDomain.Id, item.Name, item.Cidr, item.Labels)
+		if err != nil {
+			_ = tx.Rollback()
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("failed to import: %v", err)})
+			continue
+		}
+		if err = tx.Commit(); err != nil {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("commit failed: %v", err)})
+			continue
+		}
+
+		writeAuditLog(ActionCreate, ResourceRange, int(id), item.Name, map[string]string{"cidr": item.Cidr})
+		result.Imported++
+	}
+
+	return c.Status(200).JSON(result)
+}
+
 func GetRanges(c *fiber.Ctx) error {
 	var results []*fiber.Map
 	ranges, err := GetRangesFromDB(c.Query("name"))
@@ -323,43 +452,26 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 			"message": fmt.Sprintf("Unable to create new Subnet Lease  %v", err),
 		})
 	}
-	if os.Getenv("CAI_ORG_ID") != "" {
-		log.Printf("CAI for org %s enabled", os.Getenv("CAI_ORG_ID"))
-		// Integrating ranges from the VPC -- start
+	if orgID := os.Getenv("IPAM_CAI_ORG_ID"); orgID != "" && routingDomain.Vpcs != "" {
 		vpcs := strings.Split(routingDomain.Vpcs, ",")
-		log.Printf("Looking for subnets in vpcs %v", vpcs)
-		ranges, err := GetRangesForNetwork(fmt.Sprintf("organizations/%s", os.Getenv("CAI_ORG_ID")), vpcs)
+		var caiRanges []Range
+		if os.Getenv("IPAM_CAI_DB_SYNC") == "TRUE" {
+			caiRanges, err = GetCAISubnetsForNetworks(vpcs)
+		} else {
+			caiRanges, err = getLiveCAISubnetsForNetworks(context.Background(), orgID, vpcs)
+		}
 		if err != nil {
 			_ = tx.Rollback()
 			return c.Status(503).JSON(&fiber.Map{
 				"success": false,
-				"message": fmt.Sprintf("error %v", err),
+				"message": fmt.Sprintf("CAI lookup failed: %v", err),
 			})
 		}
-		log.Printf("Found %d subnets in vpcs %v", len(ranges), vpcs)
-
-		for j := 0; j < len(ranges); j++ {
-			vpc_range := ranges[j]
-			if !ContainsRange(subnet_ranges, vpc_range.cidr) {
-				log.Printf("Adding range %s from CAI", vpc_range.cidr)
-				subnet_ranges = append(subnet_ranges, Range{
-					Cidr: vpc_range.cidr,
-				})
-			}
-
-			for k := 0; k < len(vpc_range.secondaryRanges); k++ {
-				secondaryRange := vpc_range.secondaryRanges[k]
-				if !ContainsRange(subnet_ranges, secondaryRange.cidr) {
-					log.Printf("Adding secondary range %s from CAI", vpc_range.cidr)
-					subnet_ranges = append(subnet_ranges, Range{
-						Cidr: secondaryRange.cidr,
-					})
-				}
+		for _, r := range caiRanges {
+			if !ContainsRange(subnet_ranges, r.Cidr) {
+				subnet_ranges = append(subnet_ranges, r)
 			}
 		}
-		// Integrating ranges from the VPC -- end
-	} else {
-		log.Printf("Not checking CAI, env variable with Org ID not set")
 	}
 
 	subnet, subnetOnes, err := findNextSubnet(int(range_size), parent.Cidr, subnet_ranges)
