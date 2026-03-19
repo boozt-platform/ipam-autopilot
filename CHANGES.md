@@ -32,6 +32,11 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - **Added `docker-compose.yml`** — MySQL 8.4 + API + Jaeger for local development
 - **Added integration tests** — testcontainers-go (MySQL); covers all domain and range
   endpoints including legacy route backward compat
+- **Added `.devcontainer`** — Go 1.26, golangci-lint, docker-in-docker; consistent dev
+  environment via VS Code Dev Containers
+- **Added `Makefile`** — `make lint`, `make test`, `make test-integration`,
+  `make dev-apply/destroy` for local Terraform testing against docker-compose
+- **Added `.golangci.yml`** — golangci-lint v2 config; CI lint step on every PR
 
 ## Planned changes (not yet implemented)
 
