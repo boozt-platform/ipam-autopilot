@@ -63,6 +63,12 @@ func ResourceIpRange() *schema.Resource {
 				Computed: true,
 				ForceNew: true,
 			},
+			"labels": {
+				Type:     schema.TypeMap,
+				Optional: true,
+				ForceNew: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
 		},
 	}
 }
@@ -73,30 +79,29 @@ func resourceCreate(d *schema.ResourceData, meta interface{}) error {
 	name := d.Get("name").(string)
 	domain := d.Get("domain").(string)
 	cidr := d.Get("cidr").(string)
+	labels := d.Get("labels").(map[string]interface{})
 	url := fmt.Sprintf("%s/ranges", config.Url)
 	var postBody []byte
 	var err error
-	if parent == "" {
-		postBody, err = json.Marshal(map[string]interface{}{
-			"range_size": range_size,
-			"name":       name,
-			"domain":     domain,
-			"cidr":       cidr,
-		})
-		if err != nil {
-			return fmt.Errorf("failed marshalling json: %v", err)
+	body := map[string]interface{}{
+		"range_size": range_size,
+		"name":       name,
+		"domain":     domain,
+		"cidr":       cidr,
+	}
+	if parent != "" {
+		body["parent"] = parent
+	}
+	if len(labels) > 0 {
+		labelStrings := make(map[string]string, len(labels))
+		for k, v := range labels {
+			labelStrings[k] = v.(string)
 		}
-	} else {
-		postBody, err = json.Marshal(map[string]interface{}{
-			"range_size": range_size,
-			"name":       name,
-			"domain":     domain,
-			"parent":     parent,
-			"cidr":       cidr,
-		})
-		if err != nil {
-			return fmt.Errorf("failed marshalling json: %v", err)
-		}
+		body["labels"] = labelStrings
+	}
+	postBody, err = json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed marshalling json: %v", err)
 	}
 	fmt.Printf("%s", string(postBody))
 	responseBody := bytes.NewBuffer(postBody)
@@ -170,6 +175,15 @@ func resourceRead(d *schema.ResourceData, meta interface{}) error {
 		}
 		d.SetId(fmt.Sprintf("%d", int(response["id"].(float64))))
 		_ = d.Set("cidr", response["cidr"].(string))
+		if labelsRaw, ok := response["labels"]; ok && labelsRaw != nil {
+			if labelsMap, ok := labelsRaw.(map[string]interface{}); ok {
+				labels := make(map[string]string, len(labelsMap))
+				for k, v := range labelsMap {
+					labels[k] = fmt.Sprintf("%v", v)
+				}
+				_ = d.Set("labels", labels)
+			}
+		}
 		return nil
 	} else {
 		body, err := io.ReadAll(resp.Body)

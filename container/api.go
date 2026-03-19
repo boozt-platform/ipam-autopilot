@@ -40,11 +40,12 @@ type UpdateRoutingDomainRequest struct {
 }
 
 type RangeRequest struct {
-	Parent     string `json:"parent"`
-	Name       string `json:"name"`
-	Range_size int    `json:"range_size"`
-	Domain     string `json:"domain"`
-	Cidr       string `json:"cidr"`
+	Parent     string            `json:"parent"`
+	Name       string            `json:"name"`
+	Range_size int               `json:"range_size"`
+	Domain     string            `json:"domain"`
+	Cidr       string            `json:"cidr"`
+	Labels     map[string]string `json:"labels"`
 }
 
 func GetRanges(c *fiber.Ctx) error {
@@ -63,6 +64,7 @@ func GetRanges(c *fiber.Ctx) error {
 			"parent": ranges[i].Parent_id,
 			"name":   ranges[i].Name,
 			"cidr":   ranges[i].Cidr,
+			"labels": ranges[i].Labels,
 		})
 	}
 	return c.Status(200).JSON(results)
@@ -89,6 +91,7 @@ func GetRange(c *fiber.Ctx) error {
 		"parent": rang.Parent_id,
 		"name":   rang.Name,
 		"cidr":   rang.Cidr,
+		"labels": rang.Labels,
 	})
 }
 
@@ -197,7 +200,8 @@ func directInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDomain *Routi
 	id, err := CreateRangeInDb(tx, parent_id,
 		int(domain_id),
 		p.Name,
-		p.Cidr)
+		p.Cidr,
+		p.Labels)
 
 	if err != nil {
 		_ = tx.Rollback()
@@ -306,7 +310,7 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 	nextSubnet, _ := cidr.NextSubnet(subnet, int(range_size))
 	log.Printf("next subnet will be starting with %s", nextSubnet.IP.String())
 
-	id, err := CreateRangeInDb(tx, int64(parent.Subnet_id), routingDomain.Id, p.Name, fmt.Sprintf("%s/%d", subnet.IP.To4().String(), subnetOnes))
+	id, err := CreateRangeInDb(tx, int64(parent.Subnet_id), routingDomain.Id, p.Name, fmt.Sprintf("%s/%d", subnet.IP.To4().String(), subnetOnes), p.Labels)
 
 	if err != nil {
 		_ = tx.Rollback()

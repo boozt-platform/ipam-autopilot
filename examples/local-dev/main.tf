@@ -52,6 +52,10 @@ resource "ipam_ip_range" "gke_nodes" {
   range_size = 22
   parent     = ipam_ip_range.parent.cidr
   domain     = ipam_routing_domain.local.id
+  labels = {
+    env     = "local"
+    purpose = "gke-nodes"
+  }
 }
 
 output "gke_nodes_cidr" {

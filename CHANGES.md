@@ -38,10 +38,16 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
   `make dev-apply/destroy` for local Terraform testing against docker-compose
 - **Added `.golangci.yml`** — golangci-lint v2 config; CI lint step on every PR
 
+## Phase 3: Features
+
+- **Added labels/metadata on IP ranges** — new `labels JSON` column on `subnets` table
+  (migration `1773964800_add_labels_to_subnets`); API accepts and returns `labels` map on
+  `POST /ranges` and `GET /ranges/:id`; Terraform provider exposes `labels` attribute on
+  `ipam_ip_range` resource
+
 ## Planned changes (not yet implemented)
 
 See skill documentation for full roadmap:
-- Metadata/labels on IP ranges
 - `ipam_ip_range` data source for Terraform provider
 - Audit log endpoint
 - Provider registry migration to registry.opentofu.org

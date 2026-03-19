@@ -1,4 +1,5 @@
 // Copyright 2021 Google LLC
+// Copyright 2026 Boozt Fashion AB (modifications)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -34,17 +36,37 @@ type RoutingDomain struct {
 }
 
 type Range struct {
-	Subnet_id         int    `db:"subnet_id"`
-	Parent_id         int    `db:"parent_id"`
-	Routing_domain_id int    `db:"routing_domain_id"`
-	Name              string `db:"name"`
-	Cidr              string `db:"cidr"`
+	Subnet_id         int               `db:"subnet_id"`
+	Parent_id         int               `db:"parent_id"`
+	Routing_domain_id int               `db:"routing_domain_id"`
+	Name              string            `db:"name"`
+	Cidr              string            `db:"cidr"`
+	Labels            map[string]string `db:"labels"`
+}
+
+func unmarshalLabels(s sql.NullString) map[string]string {
+	labels := map[string]string{}
+	if s.Valid && s.String != "" {
+		_ = json.Unmarshal([]byte(s.String), &labels)
+	}
+	return labels
+}
+
+func marshalLabels(labels map[string]string) interface{} {
+	if len(labels) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(labels)
+	if err != nil {
+		return nil
+	}
+	return string(b)
 }
 
 func GetRangesFromDB() ([]Range, error) {
 	var ranges []Range
 
-	rows, err := db.Query("SELECT subnet_id, parent_id, routing_domain_id, name, cidr FROM subnets")
+	rows, err := db.Query("SELECT subnet_id, parent_id, routing_domain_id, name, cidr, labels FROM subnets")
 	if err != nil {
 		return nil, err
 	}
@@ -53,8 +75,9 @@ func GetRangesFromDB() ([]Range, error) {
 		var routing_domain_id int
 		tmp := pgtype.Int4{}
 		var name string
-		var cidr string
-		err := rows.Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidr)
+		var cidrVal string
+		var labelsJSON sql.NullString
+		err := rows.Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidrVal, &labelsJSON)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +91,8 @@ func GetRangesFromDB() ([]Range, error) {
 			Parent_id:         parent_id,
 			Routing_domain_id: routing_domain_id,
 			Name:              name,
-			Cidr:              cidr,
+			Cidr:              cidrVal,
+			Labels:            unmarshalLabels(labelsJSON),
 		})
 	}
 	return ranges, nil
@@ -76,7 +100,7 @@ func GetRangesFromDB() ([]Range, error) {
 
 func GetRangesForParentFromDB(tx *sql.Tx, parent_id int64) ([]Range, error) {
 	var ranges []Range
-	rows, err := tx.Query("SELECT subnet_id, parent_id, routing_domain_id, name, cidr FROM subnets WHERE parent_id = ? FOR UPDATE", parent_id)
+	rows, err := tx.Query("SELECT subnet_id, parent_id, routing_domain_id, name, cidr, labels FROM subnets WHERE parent_id = ? FOR UPDATE", parent_id)
 	if err != nil {
 		return nil, err
 	}
@@ -85,8 +109,9 @@ func GetRangesForParentFromDB(tx *sql.Tx, parent_id int64) ([]Range, error) {
 		var routing_domain_id int
 		tmp := pgtype.Int4{}
 		var name string
-		var cidr string
-		err := rows.Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidr)
+		var cidrVal string
+		var labelsJSON sql.NullString
+		err := rows.Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidrVal, &labelsJSON)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +125,8 @@ func GetRangesForParentFromDB(tx *sql.Tx, parent_id int64) ([]Range, error) {
 			Parent_id:         parent_id,
 			Routing_domain_id: routing_domain_id,
 			Name:              name,
-			Cidr:              cidr,
+			Cidr:              cidrVal,
+			Labels:            unmarshalLabels(labelsJSON),
 		})
 	}
 	return ranges, nil
@@ -111,10 +137,11 @@ func GetRangeFromDB(id int64) (*Range, error) {
 	var routing_domain_id int
 	tmp := pgtype.Int4{}
 	var name string
-	var cidr string
+	var cidrVal string
+	var labelsJSON sql.NullString
 
-	err := db.QueryRow("SELECT subnet_id, parent_id, routing_domain_id, name, cidr FROM subnets WHERE subnet_id = ?", id).Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidr)
-
+	err := db.QueryRow("SELECT subnet_id, parent_id, routing_domain_id, name, cidr, labels FROM subnets WHERE subnet_id = ?", id).
+		Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidrVal, &labelsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +155,8 @@ func GetRangeFromDB(id int64) (*Range, error) {
 		Parent_id:         parent_id,
 		Routing_domain_id: routing_domain_id,
 		Name:              name,
-		Cidr:              cidr,
+		Cidr:              cidrVal,
+		Labels:            unmarshalLabels(labelsJSON),
 	}, nil
 }
 
@@ -137,10 +165,11 @@ func GetRangeFromDBWithTx(tx *sql.Tx, id int64) (*Range, error) {
 	var routing_domain_id int
 	tmp := pgtype.Int4{}
 	var name string
-	var cidr string
+	var cidrVal string
+	var labelsJSON sql.NullString
 
-	err := tx.QueryRow("SELECT subnet_id, parent_id, routing_domain_id, name, cidr FROM subnets WHERE subnet_id = ? FOR UPDATE", id).Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidr)
-
+	err := tx.QueryRow("SELECT subnet_id, parent_id, routing_domain_id, name, cidr, labels FROM subnets WHERE subnet_id = ? FOR UPDATE", id).
+		Scan(&subnet_id, &tmp, &routing_domain_id, &name, &cidrVal, &labelsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +183,8 @@ func GetRangeFromDBWithTx(tx *sql.Tx, id int64) (*Range, error) {
 		Parent_id:         parent_id,
 		Routing_domain_id: routing_domain_id,
 		Name:              name,
-		Cidr:              cidr,
+		Cidr:              cidrVal,
+		Labels:            unmarshalLabels(labelsJSON),
 	}, nil
 }
 
@@ -162,9 +192,11 @@ func getRangeByCidrAndRoutingDomain(tx *sql.Tx, request_cidr string, routing_dom
 	var subnet_id int
 	tmp := pgtype.Int4{}
 	var name string
-	var cidr string
+	var cidrVal string
+	var labelsJSON sql.NullString
 
-	err := tx.QueryRow("SELECT subnet_id, parent_id, name, cidr FROM subnets WHERE cidr = ? and routing_domain_id = ? FOR UPDATE", request_cidr, routing_domain_id).Scan(&subnet_id, &tmp, &name, &cidr)
+	err := tx.QueryRow("SELECT subnet_id, parent_id, name, cidr, labels FROM subnets WHERE cidr = ? and routing_domain_id = ? FOR UPDATE", request_cidr, routing_domain_id).
+		Scan(&subnet_id, &tmp, &name, &cidrVal, &labelsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +211,8 @@ func getRangeByCidrAndRoutingDomain(tx *sql.Tx, request_cidr string, routing_dom
 		Parent_id:         parent_id,
 		Routing_domain_id: routing_domain_id,
 		Name:              name,
-		Cidr:              cidr,
+		Cidr:              cidrVal,
+		Labels:            unmarshalLabels(labelsJSON),
 	}, nil
 }
 
@@ -187,15 +220,18 @@ func GetRangeByCidrFromDB(tx *sql.Tx, routing_domain_id int, cidr_request string
 	var subnet_id int
 	tmp := pgtype.Int4{}
 	var name string
-	var cidr string
+	var cidrVal string
+	var labelsJSON sql.NullString
 
 	if cidr_request != "" {
-		err := tx.QueryRow("SELECT subnet_id, parent_id, name, cidr FROM subnets WHERE cidr = ? and routing_domain_id = ? FOR UPDATE", cidr_request, routing_domain_id).Scan(&subnet_id, &tmp, &name, &cidr)
+		err := tx.QueryRow("SELECT subnet_id, parent_id, name, cidr, labels FROM subnets WHERE cidr = ? and routing_domain_id = ? FOR UPDATE", cidr_request, routing_domain_id).
+			Scan(&subnet_id, &tmp, &name, &cidrVal, &labelsJSON)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err := tx.QueryRow("SELECT subnet_id, parent_id, name, cidr FROM subnets WHERE routing_domain_id = ? LIMIT 1 FOR UPDATE", routing_domain_id).Scan(&subnet_id, &tmp, &name, &cidr)
+		err := tx.QueryRow("SELECT subnet_id, parent_id, name, cidr, labels FROM subnets WHERE routing_domain_id = ? LIMIT 1 FOR UPDATE", routing_domain_id).
+			Scan(&subnet_id, &tmp, &name, &cidrVal, &labelsJSON)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +246,8 @@ func GetRangeByCidrFromDB(tx *sql.Tx, routing_domain_id int, cidr_request string
 		Parent_id:         parent_id,
 		Routing_domain_id: routing_domain_id,
 		Name:              name,
-		Cidr:              cidr,
+		Cidr:              cidrVal,
+		Labels:            unmarshalLabels(labelsJSON),
 	}, nil
 }
 
@@ -232,9 +269,10 @@ func DeleteRoutingDomainFromDB(id int64) error {
 	return nil
 }
 
-func CreateRangeInDb(tx *sql.Tx, parent_id int64, routing_domain_id int, name string, cidr string) (int64, error) {
+func CreateRangeInDb(tx *sql.Tx, parent_id int64, routing_domain_id int, name string, cidrVal string, labels map[string]string) (int64, error) {
+	labelsJSON := marshalLabels(labels)
 	if parent_id == -1 {
-		res, err := tx.Exec("INSERT INTO subnets (routing_domain_id, name, cidr) VALUES (?,?,?);", routing_domain_id, name, cidr)
+		res, err := tx.Exec("INSERT INTO subnets (routing_domain_id, name, cidr, labels) VALUES (?,?,?,?);", routing_domain_id, name, cidrVal, labelsJSON)
 		if err != nil {
 			return -1, err
 		}
@@ -244,7 +282,7 @@ func CreateRangeInDb(tx *sql.Tx, parent_id int64, routing_domain_id int, name st
 		}
 		return subnet_id, nil
 	} else {
-		res, err := tx.Exec("INSERT INTO subnets (parent_id, routing_domain_id, name, cidr) VALUES (?,?,?,?);", parent_id, routing_domain_id, name, cidr)
+		res, err := tx.Exec("INSERT INTO subnets (parent_id, routing_domain_id, name, cidr, labels) VALUES (?,?,?,?,?);", parent_id, routing_domain_id, name, cidrVal, labelsJSON)
 		if err != nil {
 			return -1, err
 		}

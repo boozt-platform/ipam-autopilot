@@ -327,6 +327,43 @@ func TestDeleteRange(t *testing.T) {
 	assert.Equal(t, 200, status)
 }
 
+func TestCreateRange_WithLabels(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+	app := newApp(database)
+
+	domainID, parentID := setupDomainAndParent(t, app)
+
+	status, body := doRequestWithStatus(app, "POST", "/api/v1/ranges", map[string]interface{}{
+		"name":       "gke-nodes-prod",
+		"range_size": 22,
+		"parent":     fmt.Sprintf("%d", parentID),
+		"domain":     fmt.Sprintf("%d", domainID),
+		"labels": map[string]string{
+			"env":     "prod",
+			"team":    "platform",
+			"purpose": "gke-nodes",
+		},
+	})
+	assert.Equal(t, 200, status)
+
+	var created map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &created))
+	id := int(created["id"].(float64))
+
+	// Verify labels are returned on GET
+	status, body = doRequestWithStatus(app, "GET", fmt.Sprintf("/api/v1/ranges/%d", id), nil)
+	assert.Equal(t, 200, status)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	labels, ok := resp["labels"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "prod", labels["env"])
+	assert.Equal(t, "platform", labels["team"])
+	assert.Equal(t, "gke-nodes", labels["purpose"])
+}
+
 // --- Legacy route backward compat ---
 
 func TestLegacyRoutesStillWork(t *testing.T) {
