@@ -16,13 +16,20 @@
     "vscode": {
       "extensions": [
         "golang.go",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "HashiCorp.HCL",
+        "hashicorp.terraform"
       ],
       "settings": {
         "go.toolsManagement.checkForUpdates": "local",
         "go.useLanguageServer": true,
         "go.lintTool": "golangci-lint",
-        "go.lintFlags": ["--fast"]
+        "go.lintFlags": ["--fast"],
+        "files.associations": {
+          "*.tftest.hcl": "terraform",
+          "*.tf": "terraform",
+          "*.tfvars": "terraform"
+        }
       }
     }
   },

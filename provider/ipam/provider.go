@@ -32,7 +32,7 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "URL where to connect with the IPAM Autopilot backend",
+				Description: "Base URL of the IPAM Autopilot Cloud Run service (e.g. `https://ipam-xxx.run.app`). Can also be set via the `IPAM_URL` environment variable.",
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
