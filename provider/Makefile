@@ -38,4 +38,4 @@ testacc:
 	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 120m
 
 docs:
-	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name ipam
+	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name ipam --website-source-dir templates --rendered-website-dir ../docs
