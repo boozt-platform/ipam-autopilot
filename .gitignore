@@ -72,3 +72,10 @@ public.key#
 terraform.tfvars 
 .temp/
 public.key
+
+# Claude Code local settings
+.claude/
+
+# Compiled binaries
+container/container
+provider/terraform-provider-ipam-autopilot

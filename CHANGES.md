@@ -7,6 +7,13 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 
 ---
 
+## Docker Publishing
+
+- **Added `container/Dockerfile`** — self-contained build (no infrastructure/output dependency)
+- **Added `.github/workflows/docker-publish.yml`** — publishes multi-arch image (`linux/amd64`, `linux/arm64`) to `ghcr.io/boozt-platform/ipam-autopilot` on each GitHub release
+
+---
+
 ## Infrastructure / Build
 
 - **Go module paths** renamed from `github.com/GoogleCloudPlatform/professional-services/*`
