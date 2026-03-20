@@ -29,17 +29,20 @@ func DataSourceIpRange() *schema.Resource {
 		Read: dataSourceRead,
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the IP range to look up.",
 			},
 			"cidr": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "The allocated CIDR block (e.g. `10.0.4.0/22`).",
 			},
 			"labels": {
-				Type:     schema.TypeMap,
-				Computed: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeMap,
+				Computed:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Labels attached to the range.",
 			},
 		},
 	}
@@ -54,7 +57,7 @@ func dataSourceRead(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed creating request: %v", err)
 	}
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(cfg.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}

@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/boozt-platform/ipam-autopilot/provider/ipam/config"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -38,36 +39,42 @@ func ResourceIpRange() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Unique name for the IP range.",
 			},
 			"range_size": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Prefix length of the subnet to allocate (e.g. `22` for a `/22`).",
 			},
 			"parent": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Parent CIDR block from which the range is allocated (e.g. `10.0.0.0/16`). When omitted the routing domain's root range is used.",
 			},
 			"domain": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Routing domain ID. When omitted the first routing domain is used.",
 			},
 			"cidr": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Computed: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "The allocated CIDR block (e.g. `10.0.4.0/22`). Computed on create; can be set to request a specific CIDR.",
 			},
 			"labels": {
-				Type:     schema.TypeMap,
-				Optional: true,
-				ForceNew: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeMap,
+				Optional:    true,
+				ForceNew:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Key/value labels to attach to the range. Keys must be ≤ 63 characters, values ≤ 255 characters.",
 			},
 		},
 	}
@@ -105,7 +112,7 @@ func resourceCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 	fmt.Printf("%s", string(postBody))
 	responseBody := bytes.NewBuffer(postBody)
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}
@@ -152,7 +159,7 @@ func resourceRead(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed creating request: %v", err)
 	}
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}
@@ -205,7 +212,7 @@ func resourceDelete(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed creating release request: %v", err)
 	}
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}
@@ -226,16 +233,15 @@ func resourceDelete(d *schema.ResourceData, meta interface{}) error {
 	}
 }
 
-func getIdentityToken() (string, error) {
+func getIdentityToken(serviceURL string) (string, error) {
 	if os.Getenv("IPAM_IDENTITY_TOKEN") != "" {
 		return os.Getenv("IPAM_IDENTITY_TOKEN"), nil
 	}
 
 	ctx := context.Background()
-	audience := "http://ipam-autopilot.com"
-	ts, err := idtoken.NewTokenSource(ctx, audience)
+	ts, err := idtoken.NewTokenSource(ctx, serviceURL)
 	if err != nil {
-		if err.Error() != `idtoken: credential must be service_account, found "authorized_user"` {
+		if !strings.Contains(err.Error(), "authorized_user") {
 			return "", err
 		}
 		gts, err := google.DefaultTokenSource(ctx)

@@ -35,18 +35,17 @@ func ResourceRoutingDomain() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: false,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    false,
+				Description: "Human-readable name for the routing domain.",
 			},
 			"vpcs": {
-				Type: schema.TypeList,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-				Required: false,
-				ForceNew: false,
-				Optional: true,
+				Type:        schema.TypeList,
+				Optional:    true,
+				ForceNew:    false,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "List of VPC identifiers scoped to this domain. Accepts full resource URLs or short names (e.g. `my-vpc`). Used by Cloud Asset Inventory integration to avoid overlaps with existing subnets.",
 			},
 		},
 	}
@@ -68,7 +67,7 @@ func routingDomainCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 	fmt.Printf("%s", string(postBody))
 	responseBody := bytes.NewBuffer(postBody)
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}
@@ -116,7 +115,7 @@ func routingDomainRead(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed creating request: %v", err)
 	}
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}
@@ -166,7 +165,7 @@ func routingDomainDelete(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed deleting routing domain request: %v", err)
 	}
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}
@@ -203,7 +202,7 @@ func routingDomainUpdate(d *schema.ResourceData, meta interface{}) error {
 	}
 	fmt.Printf("%s", string(postBody))
 	responseBody := bytes.NewBuffer(postBody)
-	accessToken, err := getIdentityToken()
+	accessToken, err := getIdentityToken(config.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
 	}

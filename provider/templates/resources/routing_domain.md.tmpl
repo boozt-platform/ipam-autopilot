@@ -1,0 +1,36 @@
+---
+page_title: "ipam_routing_domain Resource - ipam-autopilot"
+description: |-
+  Creates a routing domain that groups IP ranges for a set of VPCs.
+---
+
+# ipam_routing_domain (Resource)
+
+A routing domain is a logical grouping of IP ranges, typically corresponding to one or more GCP VPCs. Routing domains isolate address spaces so that allocations for one environment (e.g. `prod`) cannot overlap with another (e.g. `staging`).
+
+When [Cloud Asset Inventory](https://cloud.google.com/asset-inventory) integration is enabled, the `vpcs` list scopes collision avoidance to the subnets belonging to those VPCs only.
+
+## Example Usage
+
+```hcl
+resource "ipam_routing_domain" "prod" {
+  name = "prod"
+  vpcs = ["prod-vpc", "shared-vpc"]
+}
+
+resource "ipam_ip_range" "root" {
+  name       = "prod-root"
+  range_size = 16
+  domain     = ipam_routing_domain.prod.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Routing domains can be imported using the numeric domain ID:
+
+```bash
+tofu import ipam_routing_domain.prod 1
+```

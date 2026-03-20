@@ -111,8 +111,62 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - **Added CAI integration tests** — mock-free: tests seed `cai_subnets` directly and verify
   allocation avoids seeded CIDRs; covers short-name matching and VPC isolation
 
-## Planned changes (not yet implemented)
+## Infrastructure / Terraform module
 
-See skill documentation for full roadmap:
-- Provider registry migration to registry.opentofu.org
-- Bulk import endpoint
+- **Added `modules/ipam` Terraform module** — full GCP deployment: Cloud SQL (safer_mysql),
+  Cloud Run v2 with Cloud SQL Auth Proxy sidecar, Service Account with IAM roles, optional
+  Cloud Asset Inventory org-level viewer role; no hardcoded credentials — IAM authentication
+  via `--auto-iam-authn` proxy flag
+- **Added Cloud SQL Auth Proxy sidecar** — runs as a sidecar container sharing a Unix socket
+  volume; handles IAM token exchange transparently; `IPAM_DATABASE_PASSWORD` is intentionally
+  unset (proxy provides the token); image version exposed via `cloud_sql_proxy_image` variable
+  (default `2.21.2`)
+- **Enabled Cloud SQL IAM authentication** — `cloudsql_iam_authentication=on` database flag;
+  Service Account email used as MySQL username (prefix before `@`)
+- **Added `cloud_run_ingress` variable** — configurable ingress setting (default:
+  `INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER`; sandbox uses `INGRESS_TRAFFIC_ALL`)
+- **Added `cloud_sql_proxy_image` variable** — pinnable Cloud SQL Auth Proxy image version
+  (default `gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.21.2`)
+- **Added MySQL `wait_timeout`/`interactive_timeout` flags** — set to 300s to terminate idle
+  connections and prevent zombie sessions from holding row locks
+- **Fixed `FOR UPDATE` lock on routing_domains** — `GetDefaultRoutingDomainFromDB` no longer
+  takes a row lock on the routing_domains table; previously serialized all concurrent allocation
+  requests and caused `Lock wait timeout exceeded (1205)` under load
+- **Added `db.SetConnMaxLifetime(4 * time.Minute)`** — Go connection pool recycles connections
+  before MySQL's 300s wait_timeout expires, preventing stale connection errors
+- **Added `AllowCleartextPasswords: true`** — required for MySQL IAM token auth flow via
+  Cloud SQL Auth Proxy; token is transmitted in cleartext over the local Unix socket
+- **Added `examples/sandbox`** — sandbox deployment example for testing (`INGRESS_TRAFFIC_ALL`,
+  `database_deletion_protection = false`, AR remote proxy for ghcr.io)
+
+## Provider fixes
+
+- **Fixed `authorized_user` identity token fallback** — `getIdentityToken()` error check was
+  comparing against a stale error string; updated to `strings.Contains(..., "authorized_user")`
+  so developer ADC credentials (laptop / `gcloud auth application-default login`) work correctly
+- **Fixed Cloud Run identity token audience** — provider previously used a hardcoded audience
+  `http://ipam-autopilot.com`; now passes the actual Cloud Run service URL as audience so tokens
+  are accepted by authenticated (non-public) Cloud Run services
+- **Added `cloud_run_allow_unauthenticated` variable** — optional `allUsers` `roles/run.invoker`
+  binding on the Cloud Run service; default `false`; enable for sandbox/testing only
+- **Added `examples/sandbox-client`** — demonstrates allocating IP ranges from a deployed IPAM
+  instance using the `ipam-client` module; includes one-liner to read URL from sandbox output
+- **Added validation to `modules/ipam-client` variables** — `name` non-empty, `range_size`
+  1–32, `parent_cidr` valid CIDR via `can(cidrnetmask(...))`
+- **Added `database_version` validation to `modules/ipam`** — must match `^MYSQL_`
+- **Updated README** — removed outdated `infrastructure/` deployment instructions and GCS
+  registry setup; documented `modules/ipam` and `modules/ipam-client` usage, authentication,
+  and all environment variables
+
+## Provider documentation
+
+- **Added `provider/docs/`** — OpenTofu registry-compatible documentation generated via
+  `terraform-plugin-docs`; covers provider index, `ipam_ip_range` resource,
+  `ipam_routing_domain` resource, `ipam_ip_range` data source, and a getting-started guide
+- **Added schema descriptions** to all provider resource and data source fields so
+  `tfplugindocs` generates accurate per-attribute documentation
+- **Added `provider/templates/`** — custom doc templates with usage examples, import
+  instructions, and cross-references
+- **Added `provider/examples/`** — HCL example files referenced by doc templates
+- **Added `make docs`** to provider Makefile — regenerates `docs/` from templates and schema
+- **Added `provider/tools/tools.go`** — pins `tfplugindocs` as a Go tool dependency

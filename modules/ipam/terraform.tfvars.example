@@ -1,0 +1,29 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+# ── Required ───────────────────────────────────────────────────────────────────
+
+project_id = "your-gcp-project-id"
+
+# ── Optional ───────────────────────────────────────────────────────────────────
+
+# GCP organization ID — enables Cloud Asset Inventory integration.
+# Leave empty to disable CAI.
+# organization_id = "123456789012"
+
+# region = "europe-west1"
+
+# Container image. Defaults to latest from GHCR.
+# image = "ghcr.io/boozt-platform/ipam-autopilot:latest"
+
+# VPC network name. Defaults to the project's default VPC.
+# network = "default"
+
+# Set to false to use public IP for Cloud SQL (not recommended for production).
+# cloud_sql_private_ip = true
+
+# Cloud SQL machine tier.
+# database_tier = "db-f1-micro"
+
+# Set to true to prevent accidental deletion of the Cloud SQL instance.
+# database_deletion_protection = true

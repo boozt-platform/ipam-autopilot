@@ -42,13 +42,14 @@ func main() {
 	defer shutdownTracer(ctx) //nolint:errcheck
 
 	cfg := mysql.Config{
-		User:                 os.Getenv("IPAM_DATABASE_USER"),
-		Passwd:               os.Getenv("IPAM_DATABASE_PASSWORD"),
-		Net:                  os.Getenv("IPAM_DATABASE_NET"),
-		Addr:                 os.Getenv("IPAM_DATABASE_HOST"),
-		DBName:               os.Getenv("IPAM_DATABASE_NAME"),
-		MultiStatements:      true,
-		AllowNativePasswords: true,
+		User:                    os.Getenv("IPAM_DATABASE_USER"),
+		Passwd:                  os.Getenv("IPAM_DATABASE_PASSWORD"),
+		Net:                     os.Getenv("IPAM_DATABASE_NET"),
+		Addr:                    os.Getenv("IPAM_DATABASE_HOST"),
+		DBName:                  os.Getenv("IPAM_DATABASE_NAME"),
+		MultiStatements:         true,
+		AllowNativePasswords:    true,
+		AllowCleartextPasswords: true,
 	}
 
 	db, err := sql.Open("mysql", cfg.FormatDSN())
@@ -58,6 +59,7 @@ func main() {
 	}
 	db.SetMaxOpenConns(100)
 	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(4 * time.Minute)
 	defer db.Close()
 
 	if os.Getenv("IPAM_DISABLE_DATABASE_MIGRATION") != "TRUE" {

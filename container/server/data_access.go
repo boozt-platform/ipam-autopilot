@@ -402,7 +402,7 @@ func GetDefaultRoutingDomainFromDB(tx *sql.Tx) (*RoutingDomain, error) {
 	var name string
 	var vpcs sql.NullString
 
-	err := tx.QueryRow("SELECT routing_domain_id, name, vpcs FROM routing_domains LIMIT 1 FOR UPDATE").Scan(&routing_domain_id, &name, &vpcs)
+	err := tx.QueryRow("SELECT routing_domain_id, name, vpcs FROM routing_domains LIMIT 1").Scan(&routing_domain_id, &name, &vpcs)
 	if err != nil {
 		return nil, err
 	}
