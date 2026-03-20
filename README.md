@@ -19,8 +19,7 @@ Use the provided Terraform module to deploy the IPAM backend to GCP:
 
 ```hcl
 module "ipam" {
-  source  = "boozt-platform/ipam-autopilot/google"
-  version = "~> 1.7"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam?ref=v1.8.0"
 
   project_id      = "my-project"
   region          = "europe-west1"
@@ -65,7 +64,7 @@ terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.7"
+      version = "~> 1.8"
     }
   }
 }
@@ -75,7 +74,7 @@ provider "ipam" {
 }
 
 module "gke_nodes" {
-  source = "boozt-platform/ipam-autopilot/google//modules/ipam-client"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-client?ref=v1.8.0"
 
   name        = "prod-gke-nodes"
   range_size  = 22

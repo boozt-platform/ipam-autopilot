@@ -10,12 +10,11 @@ This guide walks through deploying the IPAM Autopilot backend to GCP and allocat
 
 ## 1. Deploy the backend
 
-Use the `modules/ipam` Terraform module from the [boozt-platform/ipam-autopilot](https://github.com/boozt-platform/ipam-autopilot) repository:
+Use the `modules/ipam` module from the [boozt-platform/ipam-autopilot](https://github.com/boozt-platform/ipam-autopilot) repository:
 
 ```hcl
 module "ipam" {
-  source  = "boozt-platform/ipam-autopilot/google"
-  version = "~> 1.7"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam?ref=v1.8.0"
 
   project_id = "my-gcp-project"
   region     = "europe-west1"
@@ -26,7 +25,7 @@ output "ipam_url" {
 }
 ```
 
-Run `tofu apply` and note the `ipam_url` output.
+Run `tofu init && tofu apply` and note the `ipam_url` output.
 
 ## 2. Configure the provider
 
@@ -35,7 +34,7 @@ terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.7"
+      version = "~> 1.8"
     }
   }
 }
