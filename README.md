@@ -112,7 +112,7 @@ resource "ipam_routing_domain" "prod" {
 resource "ipam_ip_range" "root" {
   name       = "prod-root"
   cidr       = "10.0.0.0/8"
-  range_size = 8
+  range_size = 8 # must match the prefix length of cidr
   domain     = ipam_routing_domain.prod.id
 }
 
