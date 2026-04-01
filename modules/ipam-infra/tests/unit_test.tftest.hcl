@@ -129,6 +129,37 @@ run "existing_database_skips_mysql_module" {
   }
 }
 
+# ── Backup configuration ─────────────────────────────────────────────────────
+
+run "backup_configuration_uses_defaults" {
+  command = plan
+
+  assert {
+    condition     = module.mysql[0].instance_name != ""
+    error_message = "MySQL instance should be planned with default backup config."
+  }
+}
+
+run "backup_configuration_custom_values_accepted" {
+  command = plan
+
+  variables {
+    database_backup_configuration = {
+      enabled                        = false
+      binary_log_enabled             = false
+      start_time                     = "03:00"
+      retained_backups               = 14
+      retention_unit                 = "COUNT"
+      transaction_log_retention_days = "7"
+    }
+  }
+
+  assert {
+    condition     = module.mysql[0].instance_name != ""
+    error_message = "MySQL instance should be planned with custom backup config."
+  }
+}
+
 # ── Private Service Access ────────────────────────────────────────────────────
 
 run "private_service_access_created_with_private_ip" {

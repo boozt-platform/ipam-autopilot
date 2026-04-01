@@ -147,6 +147,28 @@ variable "cloud_sql_proxy_image" {
   default     = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.21.2"
 }
 
+variable "database_backup_configuration" {
+  description = "Cloud SQL backup configuration for the IPAM database."
+  type = object({
+    enabled                        = optional(bool, true)
+    binary_log_enabled             = optional(bool, true)
+    start_time                     = optional(string, "02:00")
+    location                       = optional(string, null)
+    transaction_log_retention_days = optional(string, "7")
+    retained_backups               = optional(number, 14)
+    retention_unit                 = optional(string, "COUNT")
+  })
+  default = {}
+
+  validation {
+    condition = (
+      !var.database_backup_configuration.enabled ||
+      var.database_backup_configuration.retained_backups > tonumber(var.database_backup_configuration.transaction_log_retention_days)
+    )
+    error_message = "retained_backups must be greater than transaction_log_retention_days when backup is enabled."
+  }
+}
+
 variable "disable_database_migration" {
   description = "Set to true to skip automatic database migration on startup."
   type        = bool
