@@ -6,7 +6,12 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-variable "ipam_url" {
-  description = "URL of the deployed IPAM Autopilot Cloud Run service (from examples/sandbox output)."
-  type        = string
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    ipam = {
+      source  = "boozt-platform/ipam-autopilot"
+      version = "~> 1.8"
+    }
+  }
 }

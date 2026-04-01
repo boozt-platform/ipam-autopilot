@@ -94,7 +94,7 @@ module "private_service_access" {
 module "mysql" {
   count   = var.create_database ? 1 : 0
   source  = "GoogleCloudPlatform/sql-db/google//modules/safer_mysql"
-  version = "~> 23.0"
+  version = "~> 28.0"
 
   project_id       = var.project_id
   name             = var.database_instance_name
@@ -133,16 +133,7 @@ module "mysql" {
     }
   ]
 
-  backup_configuration = {
-    enabled                        = true
-    binary_log_enabled             = true
-    start_time                     = "02:00"
-    location                       = null
-    transaction_log_retention_days = "7"
-    retained_backups               = 7
-    retention_unit                 = "COUNT"
-    point_in_time_recovery_enabled = false
-  }
+  backup_configuration = var.database_backup_configuration
 
   depends_on = [module.private_service_access]
 }

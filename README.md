@@ -15,11 +15,11 @@ It integrates with Cloud Asset Inventory to discover existing subnets and preven
 
 ## Deploying the backend
 
-Use the provided Terraform module to deploy the IPAM backend to GCP:
+Use the `modules/ipam-infra` Terraform module to deploy the IPAM backend to GCP:
 
 ```hcl
 module "ipam" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam?ref=v1.8.0"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.9.0"
 
   project_id      = "my-project"
   region          = "europe-west1"
@@ -33,7 +33,7 @@ output "ipam_url" {
 }
 ```
 
-See [`modules/ipam`](./modules/ipam) for all available variables.
+See [`modules/ipam-infra`](./modules/ipam-infra) for all available variables.
 
 ### Key module variables
 
@@ -51,20 +51,20 @@ See [`modules/ipam`](./modules/ipam) for all available variables.
 
 ### Examples
 
-- [`examples/sandbox`](./examples/sandbox) — full sandbox deployment with public access for testing
+- [`examples/infra`](./examples/infra) — full sandbox deployment with public access for testing
 
 ---
 
-## Allocating IP ranges
+## Registering a network
 
-Use the `ipam-client` module to allocate ranges from a running IPAM instance:
+Use the `modules/ipam-network` module to register a VPC network and its top-level IP blocks:
 
 ```hcl
 terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.8"
+      version = "~> 1.9"
     }
   }
 }
@@ -73,24 +73,36 @@ provider "ipam" {
   url = "https://your-ipam-cloud-run-url"
 }
 
-module "gke_nodes" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-client?ref=v1.8.0"
+module "prod_network" {
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.9.0"
 
-  name        = "prod-gke-nodes"
-  range_size  = 22
-  parent_cidr = "10.0.0.0/16"
-  labels = {
-    env     = "prod"
-    purpose = "gke-nodes"
+  domain = {
+    name = "prod-vpc"
+    cidr = "10.0.0.0/8"
+  }
+  labels = { env = "prod" }
+
+  networks = {
+    "tenant"       = { size = 16 }
+    "gke-nodes"    = { size = 16 }
+    "gke-pods"     = { size = 16 }
+    "gke-services" = { size = 16 }
   }
 }
 
-output "gke_nodes_cidr" {
-  value = module.gke_nodes.cidr
+# Allocate a tenant subnet from the tenant block
+resource "ipam_ip_range" "my_team" {
+  name       = "my-team-prod"
+  range_size = 22
+  domain     = module.prod_network.domain.id
+  parent     = module.prod_network.networks["tenant"].cidr
+  labels     = { team = "my-team", env = "prod" }
 }
 ```
 
-Or manage the full hierarchy directly with provider resources:
+See [`modules/ipam-network`](./modules/ipam-network) for all available variables and outputs.
+
+Or manage resources directly without the module:
 
 ```hcl
 resource "ipam_routing_domain" "prod" {
@@ -99,7 +111,8 @@ resource "ipam_routing_domain" "prod" {
 
 resource "ipam_ip_range" "root" {
   name       = "prod-root"
-  range_size = 16
+  cidr       = "10.0.0.0/8"
+  range_size = 8 # must match the prefix length of cidr
   domain     = ipam_routing_domain.prod.id
 }
 
@@ -127,7 +140,7 @@ data "ipam_ip_range" "existing" {
 }
 ```
 
-See [`examples/sandbox-client`](./examples/sandbox-client) for a working example.
+See [`examples/sandbox-gcp-vpc`](./examples/sandbox-gcp-vpc) for a working example.
 
 ---
 
@@ -245,7 +258,7 @@ my-vpc
 | Live (default) | `IPAM_CAI_ORG_ID` only | CAI API queried on every allocation; always up to date |
 | DB sync | `IPAM_CAI_ORG_ID` + `IPAM_CAI_DB_SYNC=TRUE` | Subnets cached in `cai_subnets` table, refreshed every `IPAM_CAI_SYNC_INTERVAL`; fast, no per-request CAI latency |
 
-**Required IAM** — the Cloud Run service account needs `roles/cloudasset.viewer` at the organisation level (granted automatically by the `modules/ipam` Terraform module when `organization_id` is set).
+**Required IAM** - the Cloud Run service account needs `roles/cloudasset.viewer` at the organisation level (granted automatically by `modules/ipam-infra` when `organization_id` is set).
 
 ---
 

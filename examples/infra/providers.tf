@@ -6,10 +6,17 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-resource "ipam_ip_range" "this" {
-  name       = var.name
-  range_size = var.range_size
-  parent     = var.parent_cidr
-  domain     = var.domain
-  labels     = var.labels
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.0"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
 }

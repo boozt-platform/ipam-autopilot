@@ -8,10 +8,12 @@
 
 terraform {
   required_version = ">= 1.5"
+
   required_providers {
-    ipam = {
-      source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.7"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.26"
     }
   }
 }
+

@@ -10,11 +10,11 @@ This guide walks through deploying the IPAM Autopilot backend to GCP and allocat
 
 ## 1. Deploy the backend
 
-Use the `modules/ipam` module from the [boozt-platform/ipam-autopilot](https://github.com/boozt-platform/ipam-autopilot) repository:
+Use the `modules/ipam-infra` module from the [boozt-platform/ipam-autopilot](https://github.com/boozt-platform/ipam-autopilot) repository:
 
 ```hcl
 module "ipam" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam?ref=v1.8.0"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.9.0"
 
   project_id = "my-gcp-project"
   region     = "europe-west1"
@@ -34,7 +34,7 @@ terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.8"
+      version = "~> 1.9"
     }
   }
 }
@@ -54,7 +54,8 @@ resource "ipam_routing_domain" "prod" {
 
 resource "ipam_ip_range" "root" {
   name       = "prod-root"
-  range_size = 16
+  cidr       = "10.0.0.0/8"
+  range_size = 8 # must match the prefix length of cidr
   domain     = ipam_routing_domain.prod.id
 }
 

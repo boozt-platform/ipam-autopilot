@@ -6,7 +6,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-# Prerequisites: run examples/sandbox first to deploy the IPAM service, then
+# Prerequisites: run examples/infra first to deploy the IPAM service, then
 # set ipam_url to the Cloud Run URL from its output:
 #   cd ../sandbox && tofu output ipam_url
 #
@@ -20,11 +20,20 @@ terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.7"
+      version = "~> 1.8"
+    }
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.0"
     }
   }
 }
 
 provider "ipam" {
   url = var.ipam_url
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
 }

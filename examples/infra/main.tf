@@ -25,7 +25,7 @@ resource "google_artifact_registry_repository" "ghcr_proxy" {
 }
 
 module "ipam" {
-  source = "../../modules/ipam"
+  source = "../../modules/ipam-infra"
 
   project_id      = var.project_id
   region          = var.region
