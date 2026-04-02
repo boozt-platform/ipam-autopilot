@@ -8,7 +8,7 @@ description: |-
 
 Allocates a non-overlapping CIDR block from the IPAM Autopilot backend. The range is reserved until the resource is destroyed.
 
-~> **Note** This resource does not support in-place updates. Any change to `name`, `range_size`, `parent`, `domain`, `cidr`, or `labels` forces a new allocation.
+-> **Labels** can be updated in-place. Any change to `name`, `range_size`, `parent`, `domain`, or `cidr` forces a new allocation.
 
 ## Example Usage
 

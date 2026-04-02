@@ -25,7 +25,7 @@ module "ipam" {
   region          = "europe-west1"
   organization_id = "123456789"   # optional — enables CAI integration
 
-  image = "ghcr.io/boozt-platform/ipam-autopilot:latest"
+  image = "ghcr.io/boozt-platform/ipam-autopilot:latest"  # or booztpl/ipam-autopilot:latest
 }
 
 output "ipam_url" {
@@ -181,6 +181,7 @@ All endpoints are available under `/api/v1`:
 POST   /api/v1/ranges              allocate a new IP range (auto or direct CIDR)
 GET    /api/v1/ranges              list all ranges; optional ?name= filter
 GET    /api/v1/ranges/:id          get a single range
+PUT    /api/v1/ranges/:id          update labels on an existing range (in-place)
 DELETE /api/v1/ranges/:id          release a range
 POST   /api/v1/ranges/import       bulk-import pre-existing CIDRs (idempotent)
 
