@@ -27,6 +27,12 @@ jobs:
         with:
           version: v2.11.3
           working-directory: provider
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: container/Dockerfile
 
   unit:
     name: Unit tests

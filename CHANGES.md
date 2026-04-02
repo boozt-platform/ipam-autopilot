@@ -107,6 +107,12 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - Renamed `examples/sandbox-client` to `examples/sandbox-gcp-vpc` - extended with GCP VPC and subnet creation using IPAM-allocated CIDRs
 - Removed outdated examples: `simple-example`, `vpc-example`, `example-with-multiple-ranges`
 
+## Dockerfile hardening + lint enforcement
+
+- Switched to `gcr.io/distroless/static-debian12:nonroot` base image - runs as `nonroot` (UID 65532) by default; explicit `USER nonroot:nonroot` instruction added for clarity
+- Added `hadolint` Dockerfile linting - `make lint-docker` runs locally; `hadolint/hadolint-action@v3.1.0` added to CI lint job
+- Added `.pre-commit-config.yaml` - `hadolint` and `gofmt` run automatically on `git commit` after `pre-commit install`
+
 ## In-place label updates
 
 - Added `PUT /api/v1/ranges/:id` - updates labels on an existing range without destroying it; accepts `{ "labels": {...} }`, validates keys/values, writes an audit log entry

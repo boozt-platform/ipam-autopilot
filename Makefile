@@ -10,7 +10,7 @@ REPO_ROOT    := $(shell pwd)
 PROVIDER_DIR := $(REPO_ROOT)/provider
 LOCAL_DEV_DIR := $(REPO_ROOT)/examples/local-dev
 
-.PHONY: help lint test test-integration build-provider dev-setup dev-plan dev-apply dev-destroy docs docs-modules update-version
+.PHONY: help lint lint-docker test test-integration build-provider dev-setup dev-plan dev-apply dev-destroy docs docs-modules update-version
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -18,9 +18,13 @@ help: ## Show available targets
 
 ## ── Code quality ────────────────────────────────────────────────────────────
 
-lint: ## Run golangci-lint on container and provider
+lint: lint-docker ## Run all linters (Go + Dockerfile)
 	cd $(REPO_ROOT)/container && golangci-lint run ./...
 	cd $(REPO_ROOT)/provider  && golangci-lint run ./...
+
+lint-docker: ## Lint Dockerfiles with hadolint
+	hadolint $(REPO_ROOT)/Dockerfile
+	hadolint $(REPO_ROOT)/container/Dockerfile
 
 fmt: ## Format all Go code
 	cd $(REPO_ROOT)/container && gofmt -w .

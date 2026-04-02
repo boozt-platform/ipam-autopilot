@@ -18,9 +18,9 @@ FROM golang:1.26-bookworm AS build
 WORKDIR /go/src/app
 COPY ./container /go/src/app
 
-RUN CGO_ENABLED=0 go build -o /go/bin/app .
+RUN CGO_ENABLED=0 go build -o /go/bin/ipam-autopilot .
 
-FROM gcr.io/distroless/static-debian12
-COPY ./infrastructure/output /terraform
-COPY --from=build /go/bin/app /
-CMD ["/app"]
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /go/bin/ipam-autopilot /
+USER nonroot:nonroot
+CMD ["/ipam-autopilot"]

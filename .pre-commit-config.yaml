@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.14.0
+    hooks:
+      - id: hadolint
+        args: [container/Dockerfile]
+
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        name: gofmt (container)
+        args: [-l, -w]
+        files: ^container/
+      - id: go-fmt
+        name: gofmt (provider)
+        args: [-l, -w]
+        files: ^provider/
