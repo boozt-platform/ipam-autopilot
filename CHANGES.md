@@ -11,6 +11,8 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 
 - Added `container/Dockerfile` - self-contained build (no infrastructure/output dependency)
 - Added `.github/workflows/docker-publish.yml` - publishes multi-arch image (`linux/amd64`, `linux/arm64`) to `ghcr.io/boozt-platform/ipam-autopilot` on each GitHub release
+- Added OCI metadata labels to container image: `title`, `description`, `licenses`, `vendor` (plus `version`, `revision`, `created`, `source` auto-set by `docker/metadata-action`)
+- Added Docker Hub publishing to `booztpl/ipam-autopilot` alongside GHCR on each release
 
 ---
 
