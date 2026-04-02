@@ -7,6 +7,21 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 
 ---
 
+## Security hardening
+
+- Added input validation for all API inputs: name (max 255 chars, no empty), CIDR (host bits check, IPv4-only), range_size (1-32), labels (control characters rejected); fixed range_size=0 bypassing validation when cidr was omitted
+- Added cascade delete protection: DELETE /ranges/:id returns 409 when the range has children; DELETE /domains/:id returns 409 when the domain has ranges
+- Added domain isolation check: allocations reject parent ranges that belong to a different routing domain
+- Added unique name constraint per routing domain (DB migration `1773964910_add_unique_name_per_domain`)
+- Added caller extraction from Authorization JWT: `writeAuditLog` now records the `sub` claim from the bearer token without re-verifying the signature (Cloud Run already verified it)
+- Added `internalError` helper: logs the real error server-side, returns a sanitized "internal server error" to the client to avoid leaking internals
+- Added Fiber `BodyLimit: 1MB` to reject oversized request bodies
+- Added rate limiting middleware: 200 requests/min per IP, returns 429 on breach
+- Added integration tests covering all new validations and cascade delete behavior
+- Added `TestConcurrentAllocation` integration test verifying no overlapping CIDRs under concurrent load
+
+---
+
 ## Address space utilization stats
 
 - Added utilization stats to `GET /api/v1/ranges/:id` response - returns `stats.total_addresses`, `stats.used_addresses`, `stats.free_addresses`, `stats.utilization_pct` (2 decimal places); calculated at query time from direct child ranges, no schema changes needed

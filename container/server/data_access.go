@@ -140,6 +140,18 @@ func GetRangesForParentFromDB(tx *sql.Tx, parent_id int64) ([]Range, error) {
 	return ranges, nil
 }
 
+func CountChildRanges(id int64) (int, error) {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM subnets WHERE parent_id = ?", id).Scan(&count)
+	return count, err
+}
+
+func CountRangesForDomain(id int64) (int, error) {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM subnets WHERE routing_domain_id = ?", id).Scan(&count)
+	return count, err
+}
+
 func GetChildRangeCIDRsFromDB(id int64) ([]string, error) {
 	rows, err := db.Query("SELECT cidr FROM subnets WHERE parent_id = ?", id)
 	if err != nil {
