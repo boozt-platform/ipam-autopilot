@@ -34,7 +34,7 @@ func ResourceIpRange() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCreate,
 		Read:   resourceRead,
-		//Update: resourceUpdate,
+		Update: resourceUpdate,
 		Delete: resourceDelete,
 
 		Schema: map[string]*schema.Schema{
@@ -72,7 +72,6 @@ func ResourceIpRange() *schema.Resource {
 			"labels": {
 				Type:        schema.TypeMap,
 				Optional:    true,
-				ForceNew:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "Key/value labels to attach to the range. Keys must be ≤ 63 characters, values ≤ 255 characters.",
 			},
@@ -149,6 +148,48 @@ func resourceCreate(d *schema.ResourceData, meta interface{}) error {
 
 		return fmt.Errorf("failed creating range status_code=%d, status=%s,body=%s", resp.StatusCode, resp.Status, string(body))
 	}
+}
+
+func resourceUpdate(d *schema.ResourceData, meta interface{}) error {
+	config := meta.(config.Config)
+	labels := d.Get("labels").(map[string]interface{})
+	url := fmt.Sprintf("%s/ranges/%s", config.Url, d.Id())
+
+	labelStrings := make(map[string]string, len(labels))
+	for k, v := range labels {
+		labelStrings[k] = v.(string)
+	}
+	body := map[string]interface{}{
+		"labels": labelStrings,
+	}
+	postBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed marshalling json: %v", err)
+	}
+	accessToken, err := getIdentityToken(config.Url)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve access token: %v", err)
+	}
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(postBody))
+	if err != nil {
+		return fmt.Errorf("failed creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed updating range: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		return nil
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed updating range status_code=%d, status=%s", resp.StatusCode, resp.Status)
+	}
+	return fmt.Errorf("failed updating range status_code=%d, status=%s, body=%s", resp.StatusCode, resp.Status, string(respBody))
 }
 
 func resourceRead(d *schema.ResourceData, meta interface{}) error {
