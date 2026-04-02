@@ -28,10 +28,17 @@ func DataSourceIpRange() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceRead,
 		Schema: map[string]*schema.Schema{
+			"id": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				Description: "ID of the IP range. Use this when the range is managed in the same stack to avoid stale name lookups.",
+			},
 			"name": {
 				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Name of the IP range to look up.",
+				Optional:    true,
+				Computed:    true,
+				Description: "Name of the IP range to look up. Use `id` when the range is managed in the same stack.",
 			},
 			"cidr": {
 				Type:        schema.TypeString,
@@ -50,44 +57,62 @@ func DataSourceIpRange() *schema.Resource {
 
 func dataSourceRead(d *schema.ResourceData, meta interface{}) error {
 	cfg := meta.(config.Config)
-	name := d.Get("name").(string)
 
-	url := fmt.Sprintf("%s/ranges?name=%s", cfg.Url, name)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed creating request: %v", err)
-	}
 	accessToken, err := getIdentityToken(cfg.Url)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve access token: %v", err)
+	}
+
+	rangeID := d.Get("id").(string)
+	if rangeID == "" {
+		rangeID = d.Id()
+	}
+
+	if rangeID == "" {
+		name, ok := d.GetOk("name")
+		if !ok || name.(string) == "" {
+			return fmt.Errorf("one of `id` or `name` must be set")
+		}
+		rangeID, err = resolveRangeIDByName(cfg.Url, name.(string), accessToken)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Fetch range by ID.
+	getURL := fmt.Sprintf("%s/api/v1/ranges/%s", cfg.Url, rangeID)
+	req, err := http.NewRequest("GET", getURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed creating request: %v", err)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed querying ranges: %v", err)
+		return fmt.Errorf("failed querying range: %v", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("unable to read response: %v", err)
 	}
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed querying ranges status_code=%d, body=%s", resp.StatusCode, string(body))
+		return fmt.Errorf("failed querying range status_code=%d, body=%s", resp.StatusCode, string(body))
 	}
 
-	var results []map[string]interface{}
-	if err := json.Unmarshal(body, &results); err != nil {
+	var match map[string]interface{}
+	if err := json.Unmarshal(body, &match); err != nil {
 		return fmt.Errorf("unable to unmarshal response: %v", err)
 	}
-	if len(results) == 0 {
-		return fmt.Errorf("no ip range found with name %q", name)
-	}
 
-	match := results[0]
-	d.SetId(fmt.Sprintf("%d", int(match["id"].(float64))))
+	d.SetId(rangeID)
+	_ = d.Set("id", rangeID)
 	_ = d.Set("cidr", match["cidr"].(string))
+
+	if nameVal, ok := match["name"]; ok && nameVal != nil {
+		_ = d.Set("name", nameVal.(string))
+	}
 
 	if labelsRaw, ok := match["labels"]; ok && labelsRaw != nil {
 		if labelsMap, ok := labelsRaw.(map[string]interface{}); ok {

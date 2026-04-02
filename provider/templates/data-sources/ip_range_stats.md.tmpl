@@ -6,19 +6,21 @@ description: |-
 
 # ipam_ip_range_stats (Data Source)
 
-Reads utilization stats for an IP range by name. Use this to monitor address space consumption and detect exhaustion risk.
+Reads utilization stats for an IP range by name or ID. Use this to monitor address space consumption and detect exhaustion risk.
 
 Stats are re-read on every `plan` and `apply`. This is intentional: the data source is designed for use in `precondition` checks and monitoring outputs where fresh values are needed.
 
 -> This data source is separate from `data.ipam_ip_range` to avoid injecting frequently-changing stats into stacks that only need a stable CIDR reference.
 
+When the range is managed in the same stack, use `id` to reference the resource directly and avoid stale name lookups.
+
 ## Example Usage
 
-### Output utilization
+### Output utilization (same stack)
 
 ```hcl
 data "ipam_ip_range_stats" "tenant" {
-  name = "prod-vpc-tenant"
+  id = module.prod_network.networks["tenant"].id
 }
 
 output "tenant_utilization_pct" {
@@ -26,9 +28,21 @@ output "tenant_utilization_pct" {
 }
 ```
 
+### Cross-stack lookup by name
+
+```hcl
+data "ipam_ip_range_stats" "tenant" {
+  name = "prod-vpc-tenant"
+}
+```
+
 ### Guard allocation with a precondition
 
 ```hcl
+data "ipam_ip_range_stats" "tenant" {
+  id = module.prod_network.networks["tenant"].id
+}
+
 resource "ipam_ip_range" "my_team" {
   name       = "my-team-prod"
   range_size = 22

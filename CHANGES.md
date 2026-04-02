@@ -10,7 +10,8 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 ## Address space utilization stats
 
 - Added utilization stats to `GET /api/v1/ranges/:id` response - returns `stats.total_addresses`, `stats.used_addresses`, `stats.free_addresses`, `stats.utilization_pct` (2 decimal places); calculated at query time from direct child ranges, no schema changes needed
-- Added `data "ipam_ip_range_stats"` Terraform data source - looks up a range by name and exposes utilization stats as top-level attributes; kept separate from `data "ipam_ip_range"` to avoid plan noise in stacks that only need a stable CIDR reference
+- Added `data "ipam_ip_range_stats"` Terraform data source - looks up a range by `id` or `name` and exposes utilization stats as top-level attributes; kept separate from `data "ipam_ip_range"` to avoid plan noise in stacks that only need a stable CIDR reference
+- Added `id` lookup to `data "ipam_ip_range"` and `data "ipam_ip_range_stats"` - both data sources now accept `id` (same-stack, precise) or `name` (cross-stack); `id` takes precedence and avoids stale lookups when multiple ranges share the same name
 - Added unit tests for `computeStats` covering empty, partial, and fully-allocated cases
 - Added integration test `TestGetRange_IncludesStats`
 

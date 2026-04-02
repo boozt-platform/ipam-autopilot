@@ -131,11 +131,31 @@ output "gke_nodes_cidr" {
 }
 ```
 
-To read an existing range without allocating:
+To read an existing range without allocating (cross-stack, by name):
 
 ```hcl
 data "ipam_ip_range" "existing" {
   name = "prod-gke-nodes"
+}
+```
+
+Or by ID when the range is managed in the same stack:
+
+```hcl
+data "ipam_ip_range" "existing" {
+  id = ipam_ip_range.gke_nodes.id
+}
+```
+
+To read utilization stats for a range:
+
+```hcl
+data "ipam_ip_range_stats" "tenant" {
+  id = module.prod_network.networks["tenant"].id
+}
+
+output "tenant_utilization_pct" {
+  value = data.ipam_ip_range_stats.tenant.utilization_pct
 }
 ```
 
