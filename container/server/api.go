@@ -30,6 +30,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// --- Types ---
+
 type CreateRoutingDomainRequest struct {
 	Name string   `json:"name"`
 	Vpcs []string `json:"vpcs"`
@@ -59,6 +61,58 @@ type RangeStats struct {
 	FreeAddresses  int64   `json:"free_addresses"`
 	UtilizationPct float64 `json:"utilization_pct"`
 }
+
+type ImportRangeItem struct {
+	Name   string            `json:"name"`
+	Cidr   string            `json:"cidr"`
+	Domain string            `json:"domain"`
+	Parent string            `json:"parent"`
+	Labels map[string]string `json:"labels"`
+}
+
+type ImportError struct {
+	Name  string `json:"name"`
+	Cidr  string `json:"cidr"`
+	Error string `json:"error"`
+}
+
+type ImportResult struct {
+	Imported int           `json:"imported"`
+	Skipped  int           `json:"skipped"`
+	Errors   []ImportError `json:"errors"`
+}
+
+type JSONString struct {
+	Value string
+	Set   bool
+}
+
+func (i *JSONString) UnmarshalJSON(data []byte) error {
+	i.Set = true
+	var val string
+	if err := json.Unmarshal(data, &val); err != nil {
+		return err
+	}
+	i.Value = val
+	return nil
+}
+
+type JSONStringArray struct {
+	Value []string
+	Set   bool
+}
+
+func (i *JSONStringArray) UnmarshalJSON(data []byte) error {
+	i.Set = true
+	var val []string
+	if err := json.Unmarshal(data, &val); err != nil {
+		return err
+	}
+	i.Value = val
+	return nil
+}
+
+// --- Functions ---
 
 func computeStats(cidrStr string, childCIDRs []string) (RangeStats, error) {
 	_, ipNet, err := net.ParseCIDR(cidrStr)
@@ -91,26 +145,6 @@ func computeStats(cidrStr string, childCIDRs []string) (RangeStats, error) {
 	}, nil
 }
 
-type ImportRangeItem struct {
-	Name   string            `json:"name"`
-	Cidr   string            `json:"cidr"`
-	Domain string            `json:"domain"`
-	Parent string            `json:"parent"`
-	Labels map[string]string `json:"labels"`
-}
-
-type ImportError struct {
-	Name  string `json:"name"`
-	Cidr  string `json:"cidr"`
-	Error string `json:"error"`
-}
-
-type ImportResult struct {
-	Imported int           `json:"imported"`
-	Skipped  int           `json:"skipped"`
-	Errors   []ImportError `json:"errors"`
-}
-
 func ImportRanges(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -125,37 +159,18 @@ func ImportRanges(c *fiber.Ctx) error {
 	result := ImportResult{Errors: []ImportError{}}
 
 	for _, item := range items {
-		if item.Name == "" {
-			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "name is required"})
+		name, nameErr := validateName(item.Name)
+		if nameErr != nil {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: nameErr.Error()})
 			continue
 		}
-		if len(item.Name) > 255 {
-			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "name must not exceed 255 characters"})
-			continue
-		}
+		item.Name = name
 		if item.Cidr == "" {
 			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "cidr is required"})
 			continue
 		}
-		labelErr := false
-		for k, v := range item.Labels {
-			if k == "" || v == "" {
-				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: "label keys and values must not be empty"})
-				labelErr = true
-				break
-			}
-			if len(k) > 63 {
-				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("label key %q must not exceed 63 characters", k)})
-				labelErr = true
-				break
-			}
-			if len(v) > 255 {
-				result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: fmt.Sprintf("label value for key %q must not exceed 255 characters", k)})
-				labelErr = true
-				break
-			}
-		}
-		if labelErr {
+		if labelErr := validateLabels(item.Labels); labelErr != nil {
+			result.Errors = append(result.Errors, ImportError{Name: item.Name, Cidr: item.Cidr, Error: labelErr.Error()})
 			continue
 		}
 
@@ -213,7 +228,8 @@ func ImportRanges(c *fiber.Ctx) error {
 			continue
 		}
 
-		writeAuditLog(ActionCreate, ResourceRange, int(id), item.Name, map[string]string{"cidr": item.Cidr})
+		caller := extractCallerFromToken(c.Get("Authorization"))
+		writeAuditLog(ActionCreate, ResourceRange, int(id), item.Name, map[string]string{"cidr": item.Cidr}, caller)
 		result.Imported++
 	}
 
@@ -224,10 +240,7 @@ func GetRanges(c *fiber.Ctx) error {
 	var results []*fiber.Map
 	ranges, err := GetRangesFromDB(c.Query("name"))
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
 
 	for i := 0; i < len(ranges); i++ {
@@ -252,25 +265,16 @@ func GetRange(c *fiber.Ctx) error {
 	}
 	rang, err := GetRangeFromDB(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
 
 	childCIDRs, err := GetChildRangeCIDRsFromDB(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("failed fetching child ranges: %v", err),
-		})
+		return internalError(c, fmt.Errorf("failed fetching child ranges: %w", err))
 	}
 	stats, err := computeStats(rang.Cidr, childCIDRs)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("failed computing stats: %v", err),
-		})
+		return internalError(c, fmt.Errorf("failed computing stats: %w", err))
 	}
 
 	return c.Status(200).JSON(&fiber.Map{
@@ -300,25 +304,11 @@ func UpdateRange(c *fiber.Ctx) error {
 		})
 	}
 
-	for k, v := range p.Labels {
-		if k == "" || v == "" {
-			return c.Status(400).JSON(&fiber.Map{
-				"success": false,
-				"message": "label keys and values must not be empty",
-			})
-		}
-		if len(k) > 63 {
-			return c.Status(400).JSON(&fiber.Map{
-				"success": false,
-				"message": fmt.Sprintf("label key %q must not exceed 63 characters", k),
-			})
-		}
-		if len(v) > 255 {
-			return c.Status(400).JSON(&fiber.Map{
-				"success": false,
-				"message": fmt.Sprintf("label value for key %q must not exceed 255 characters", v),
-			})
-		}
+	if err := validateLabels(p.Labels); err != nil {
+		return c.Status(400).JSON(&fiber.Map{
+			"success": false,
+			"message": err.Error(),
+		})
 	}
 
 	rang, err := GetRangeFromDB(id)
@@ -330,13 +320,11 @@ func UpdateRange(c *fiber.Ctx) error {
 	}
 
 	if err := UpdateRangeLabelsInDb(id, p.Labels); err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("failed updating range: %v", err),
-		})
+		return internalError(c, fmt.Errorf("failed updating range: %w", err))
 	}
 
-	writeAuditLog(ActionUpdate, ResourceRange, int(id), rang.Name, map[string]string{"cidr": rang.Cidr})
+	caller := extractCallerFromToken(c.Get("Authorization"))
+	writeAuditLog(ActionUpdate, ResourceRange, int(id), rang.Name, map[string]string{"cidr": rang.Cidr}, caller)
 	return c.Status(200).JSON(&fiber.Map{
 		"id":     id,
 		"name":   rang.Name,
@@ -355,19 +343,27 @@ func DeleteRange(c *fiber.Ctx) error {
 	}
 	rang, err := GetRangeFromDB(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
+		return internalError(c, err)
+	}
+
+	childCount, err := CountChildRanges(id)
+	if err != nil {
+		return internalError(c, err)
+	}
+	if childCount > 0 {
+		return c.Status(409).JSON(&fiber.Map{
 			"success": false,
-			"message": fmt.Sprintf("%v", err),
+			"message": fmt.Sprintf("range has %d child ranges; delete them first", childCount),
 		})
 	}
+
 	err = DeleteRangeFromDb(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
-	writeAuditLog(ActionDelete, ResourceRange, int(id), rang.Name, map[string]string{"cidr": rang.Cidr})
+
+	caller := extractCallerFromToken(c.Get("Authorization"))
+	writeAuditLog(ActionDelete, ResourceRange, int(id), rang.Name, map[string]string{"cidr": rang.Cidr}, caller)
 	return c.Status(200).JSON(&fiber.Map{
 		"success": true,
 	})
@@ -377,10 +373,7 @@ func GetAuditLogs(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "100"))
 	logs, err := GetAuditLogsFromDB(limit)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
 	if logs == nil {
 		logs = []AuditLog{}
@@ -392,7 +385,7 @@ func CreateNewRange(c *fiber.Ctx) error {
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		log.Fatal(err)
+		return internalError(c, fmt.Errorf("BeginTx: %w", err))
 	}
 
 	// Instantiate new RangeRequest struct
@@ -407,40 +400,40 @@ func CreateNewRange(c *fiber.Ctx) error {
 		})
 	}
 
-	if p.Name == "" {
+	name, nameErr := validateName(p.Name)
+	if nameErr != nil {
 		_ = tx.Rollback()
 		return c.Status(400).JSON(&fiber.Map{
 			"success": false,
-			"message": "name is required",
+			"message": nameErr.Error(),
 		})
 	}
-	if len(p.Name) > 255 {
+	p.Name = name
+
+	if labelErr := validateLabels(p.Labels); labelErr != nil {
 		_ = tx.Rollback()
 		return c.Status(400).JSON(&fiber.Map{
 			"success": false,
-			"message": "name must not exceed 255 characters",
+			"message": labelErr.Error(),
 		})
 	}
-	for k, v := range p.Labels {
-		if k == "" || v == "" {
+
+	if p.Cidr != "" {
+		if cidrErr := validateCIDR(p.Cidr); cidrErr != nil {
 			_ = tx.Rollback()
 			return c.Status(400).JSON(&fiber.Map{
 				"success": false,
-				"message": "label keys and values must not be empty",
+				"message": cidrErr.Error(),
 			})
 		}
-		if len(k) > 63 {
+	}
+
+	if p.Cidr == "" {
+		if sizeErr := validateRangeSize(p.Range_size); sizeErr != nil {
 			_ = tx.Rollback()
 			return c.Status(400).JSON(&fiber.Map{
 				"success": false,
-				"message": fmt.Sprintf("label key %q must not exceed 63 characters", k),
-			})
-		}
-		if len(v) > 255 {
-			_ = tx.Rollback()
-			return c.Status(400).JSON(&fiber.Map{
-				"success": false,
-				"message": fmt.Sprintf("label value for key %q must not exceed 255 characters", k),
+				"message": sizeErr.Error(),
 			})
 		}
 	}
@@ -459,6 +452,7 @@ func CreateNewRange(c *fiber.Ctx) error {
 	} else {
 		domain_id, err := strconv.ParseInt(p.Domain, 10, 64)
 		if err != nil {
+			_ = tx.Rollback()
 			return c.Status(400).JSON(&fiber.Map{
 				"success": false,
 				"message": fmt.Sprintf("%v", err),
@@ -486,6 +480,7 @@ func directInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDomain *Routi
 	var err error
 	domain_id, err := strconv.ParseInt(p.Domain, 10, 64)
 	if err != nil {
+		_ = tx.Rollback()
 		return c.Status(400).JSON(&fiber.Map{
 			"success": false,
 			"message": fmt.Sprintf("Domain needs to be an integer %v", err),
@@ -498,12 +493,30 @@ func directInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDomain *Routi
 		if err != nil {
 			rangeFromDb, err := getRangeByCidrAndRoutingDomain(tx, p.Parent, int(domain_id))
 			if err != nil {
+				_ = tx.Rollback()
 				return c.Status(400).JSON(&fiber.Map{
 					"success": false,
 					"message": fmt.Sprintf("Parent needs to be either a cidr range within the routing domain or the id of a valid range %v", err),
 				})
 			}
 			parent_id = int64(rangeFromDb.Subnet_id)
+		} else {
+			// When parent is an integer ID, verify it belongs to the same domain.
+			parentRange, verifyErr := GetRangeFromDBWithTx(tx, parent_id)
+			if verifyErr != nil {
+				_ = tx.Rollback()
+				return c.Status(400).JSON(&fiber.Map{
+					"success": false,
+					"message": fmt.Sprintf("parent range not found: %v", verifyErr),
+				})
+			}
+			if parentRange.Routing_domain_id != int(domain_id) {
+				_ = tx.Rollback()
+				return c.Status(400).JSON(&fiber.Map{
+					"success": false,
+					"message": "parent range belongs to a different routing domain",
+				})
+			}
 		}
 	}
 
@@ -515,18 +528,15 @@ func directInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDomain *Routi
 
 	if err != nil {
 		_ = tx.Rollback()
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("Unable to create new Subnet Lease %v", err),
-		})
+		return internalError(c, fmt.Errorf("unable to create new subnet lease: %w", err))
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
+	if err = tx.Commit(); err != nil {
+		return internalError(c, err)
 	}
 
-	writeAuditLog(ActionCreate, ResourceRange, int(id), p.Name, map[string]string{"cidr": p.Cidr})
+	caller := extractCallerFromToken(c.Get("Authorization"))
+	writeAuditLog(ActionCreate, ResourceRange, int(id), p.Name, map[string]string{"cidr": p.Cidr}, caller)
 	return c.Status(200).JSON(&fiber.Map{
 		"id":     id,
 		"name":   p.Name,
@@ -543,6 +553,7 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 		if err != nil {
 			parent, err = getRangeByCidrAndRoutingDomain(tx, p.Parent, routingDomain.Id)
 			if err != nil {
+				_ = tx.Rollback()
 				return c.Status(400).JSON(&fiber.Map{
 					"success": false,
 					"message": fmt.Sprintf("Parent needs to be either a cidr range within the routing domain or the id of a valid range %v", err),
@@ -552,13 +563,18 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 			parent, err = GetRangeFromDBWithTx(tx, parent_id)
 			if err != nil {
 				_ = tx.Rollback()
-				return c.Status(503).JSON(&fiber.Map{
+				return internalError(c, fmt.Errorf("unable to create new subnet lease: %w", err))
+			}
+			if parent.Routing_domain_id != routingDomain.Id {
+				_ = tx.Rollback()
+				return c.Status(400).JSON(&fiber.Map{
 					"success": false,
-					"message": fmt.Sprintf("Unable to create new Subnet Lease  %v", err),
+					"message": "parent range belongs to a different routing domain",
 				})
 			}
 		}
 	} else {
+		_ = tx.Rollback()
 		return c.Status(400).JSON(&fiber.Map{
 			"success": false,
 			"message": "Please provide the ID of a parent range",
@@ -568,10 +584,7 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 	subnet_ranges, err := GetRangesForParentFromDB(tx, int64(parent.Subnet_id))
 	if err != nil {
 		_ = tx.Rollback()
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("Unable to create new Subnet Lease  %v", err),
-		})
+		return internalError(c, fmt.Errorf("unable to create new subnet lease: %w", err))
 	}
 	if orgID := os.Getenv("IPAM_CAI_ORG_ID"); orgID != "" && routingDomain.Vpcs != "" {
 		vpcs := strings.Split(routingDomain.Vpcs, ",")
@@ -583,10 +596,7 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 		}
 		if err != nil {
 			_ = tx.Rollback()
-			return c.Status(503).JSON(&fiber.Map{
-				"success": false,
-				"message": fmt.Sprintf("CAI lookup failed: %v", err),
-			})
+			return internalError(c, fmt.Errorf("CAI lookup failed: %w", err))
 		}
 		for _, r := range caiRanges {
 			if !ContainsRange(subnet_ranges, r.Cidr) {
@@ -598,10 +608,13 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 	subnet, subnetOnes, err := findNextSubnet(int(range_size), parent.Cidr, subnet_ranges)
 	if err != nil {
 		_ = tx.Rollback()
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("Unable to create new Subnet Lease %v", err),
-		})
+		if err.Error() == errNoAddressAvailable.Error() {
+			return c.Status(409).JSON(&fiber.Map{
+				"success": false,
+				"message": "no address range available in parent",
+			})
+		}
+		return internalError(c, err)
 	}
 	nextSubnet, _ := cidr.NextSubnet(subnet, int(range_size))
 	log.Printf("next subnet will be starting with %s", nextSubnet.IP.String())
@@ -610,19 +623,16 @@ func findNewLeaseAndInsert(c *fiber.Ctx, tx *sql.Tx, p RangeRequest, routingDoma
 
 	if err != nil {
 		_ = tx.Rollback()
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("Unable to create new Subnet Lease %v", err),
-		})
+		return internalError(c, fmt.Errorf("unable to create new subnet lease: %w", err))
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
+	if err = tx.Commit(); err != nil {
+		return internalError(c, err)
 	}
 
 	allocatedCidr := fmt.Sprintf("%s/%d", subnet.IP.To4().String(), subnetOnes)
-	writeAuditLog(ActionCreate, ResourceRange, int(id), p.Name, map[string]string{"cidr": allocatedCidr})
+	caller := extractCallerFromToken(c.Get("Authorization"))
+	writeAuditLog(ActionCreate, ResourceRange, int(id), p.Name, map[string]string{"cidr": allocatedCidr}, caller)
 	return c.Status(200).JSON(&fiber.Map{
 		"id":     id,
 		"name":   p.Name,
@@ -671,10 +681,7 @@ func GetRoutingDomain(c *fiber.Ctx) error {
 	}
 	domain, err := GetRoutingDomainFromDB(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
 
 	return c.Status(200).JSON(&fiber.Map{
@@ -694,19 +701,27 @@ func DeleteRoutingDomain(c *fiber.Ctx) error {
 	}
 	domain, err := GetRoutingDomainFromDB(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
+		return internalError(c, err)
+	}
+
+	rangeCount, err := CountRangesForDomain(id)
+	if err != nil {
+		return internalError(c, err)
+	}
+	if rangeCount > 0 {
+		return c.Status(409).JSON(&fiber.Map{
 			"success": false,
-			"message": fmt.Sprintf("%v", err),
+			"message": fmt.Sprintf("routing domain has %d ranges; delete them first", rangeCount),
 		})
 	}
+
 	err = DeleteRoutingDomainFromDB(id)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
-	writeAuditLog(ActionDelete, ResourceDomain, int(id), domain.Name, nil)
+
+	caller := extractCallerFromToken(c.Get("Authorization"))
+	writeAuditLog(ActionDelete, ResourceDomain, int(id), domain.Name, nil, caller)
 	return c.Status(200).JSON(&fiber.Map{})
 }
 
@@ -714,10 +729,7 @@ func GetRoutingDomains(c *fiber.Ctx) error {
 	var results []*fiber.Map
 	domains, err := GetRoutingDomainsFromDB()
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("%v", err),
-		})
+		return internalError(c, err)
 	}
 
 	for i := 0; i < len(domains); i++ {
@@ -749,34 +761,52 @@ func UpdateRoutingDomain(c *fiber.Ctx) error {
 			"message": fmt.Sprintf("Bad format %v", err),
 		})
 	}
+
+	if p.Name.Set {
+		name, nameErr := validateName(p.Name.Value)
+		if nameErr != nil {
+			return c.Status(400).JSON(&fiber.Map{
+				"success": false,
+				"message": nameErr.Error(),
+			})
+		}
+		p.Name.Value = name
+	}
+
 	err = UpdateRoutingDomainOnDb(id, p.Name, p.Vpcs)
 	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
-			"success": false,
-			"message": fmt.Sprintf("Unable to update routing domain %v", err),
-		})
+		return internalError(c, fmt.Errorf("unable to update routing domain: %w", err))
 	}
 	return c.Status(200).JSON(&fiber.Map{})
 }
 
 func CreateRoutingDomain(c *fiber.Ctx) error {
-	// Instantiate new UpdateRoutingDomainRequest struct
+	// Instantiate new CreateRoutingDomainRequest struct
 	p := new(CreateRoutingDomainRequest)
-	//  Parse body into UpdateRoutingDomainRequest struct
+	//  Parse body into CreateRoutingDomainRequest struct
 	if err := c.BodyParser(p); err != nil {
 		return c.Status(400).JSON(&fiber.Map{
 			"success": false,
 			"message": fmt.Sprintf("Bad format %v", err),
 		})
 	}
-	id, err := CreateRoutingDomainOnDb(p.Name, p.Vpcs)
-	if err != nil {
-		return c.Status(503).JSON(&fiber.Map{
+
+	name, nameErr := validateName(p.Name)
+	if nameErr != nil {
+		return c.Status(400).JSON(&fiber.Map{
 			"success": false,
-			"message": fmt.Sprintf("Unable to create new routing domain %v", err),
+			"message": nameErr.Error(),
 		})
 	}
-	writeAuditLog(ActionCreate, ResourceDomain, int(id), p.Name, nil)
+	p.Name = name
+
+	id, err := CreateRoutingDomainOnDb(p.Name, p.Vpcs)
+	if err != nil {
+		return internalError(c, fmt.Errorf("unable to create new routing domain: %w", err))
+	}
+
+	caller := extractCallerFromToken(c.Get("Authorization"))
+	writeAuditLog(ActionCreate, ResourceDomain, int(id), p.Name, nil, caller)
 	return c.Status(200).JSON(&fiber.Map{
 		"id": id,
 	})
@@ -789,34 +819,4 @@ func ContainsRange(array []Range, cidr string) bool {
 		}
 	}
 	return false
-}
-
-type JSONString struct {
-	Value string
-	Set   bool
-}
-
-func (i *JSONString) UnmarshalJSON(data []byte) error {
-	i.Set = true
-	var val string
-	if err := json.Unmarshal(data, &val); err != nil {
-		return err
-	}
-	i.Value = val
-	return nil
-}
-
-type JSONStringArray struct {
-	Value []string
-	Set   bool
-}
-
-func (i *JSONStringArray) UnmarshalJSON(data []byte) error {
-	i.Set = true
-	var val []string
-	if err := json.Unmarshal(data, &val); err != nil {
-		return err
-	}
-	i.Value = val
-	return nil
 }

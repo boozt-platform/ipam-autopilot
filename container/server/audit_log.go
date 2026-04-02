@@ -15,8 +15,10 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
+	"strings"
 )
 
 const (
@@ -38,7 +40,36 @@ type AuditLog struct {
 	Detail       map[string]string `json:"detail,omitempty"`
 }
 
-func writeAuditLog(action, resourceType string, resourceID int, resourceName string, detail map[string]string) {
+func extractCallerFromToken(authHeader string) string {
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	jwtParts := strings.Split(parts[1], ".")
+	if len(jwtParts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(jwtParts[1])
+	if err != nil {
+		return ""
+	}
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	if sub, ok := claims["sub"].(string); ok {
+		return sub
+	}
+	return ""
+}
+
+func writeAuditLog(action, resourceType string, resourceID int, resourceName string, detail map[string]string, caller ...string) {
+	if len(caller) > 0 && caller[0] != "" {
+		if detail == nil {
+			detail = map[string]string{}
+		}
+		detail["caller"] = caller[0]
+	}
 	var detailJSON interface{}
 	if len(detail) > 0 {
 		b, err := json.Marshal(detail)

@@ -18,8 +18,10 @@ package server
 import (
 	"database/sql"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 )
 
 var db *sql.DB
@@ -27,7 +29,19 @@ var db *sql.DB
 func NewApp(database *sql.DB) *fiber.App {
 	db = database
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 1 * 1024 * 1024,
+	})
+	app.Use(limiter.New(limiter.Config{
+		Max:        200,
+		Expiration: 1 * time.Minute,
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(&fiber.Map{
+				"success": false,
+				"message": "rate limit exceeded",
+			})
+		},
+	}))
 	app.Use(requestIDMiddleware())
 	app.Use(tracingMiddleware())
 	app.Use(accessLogMiddleware())
