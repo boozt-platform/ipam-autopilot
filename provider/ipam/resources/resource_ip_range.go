@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -46,9 +47,10 @@ func ResourceIpRange() *schema.Resource {
 			},
 			"range_size": {
 				Type:        schema.TypeInt,
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 				ForceNew:    true,
-				Description: "Prefix length of the subnet to allocate (e.g. `22` for a `/22`).",
+				Description: "Prefix length of the subnet to allocate (e.g. `22` for a `/22`). When `cidr` is set, this is derived automatically from the prefix length and can be omitted.",
 			},
 			"parent": {
 				Type:        schema.TypeString,
@@ -78,6 +80,21 @@ func ResourceIpRange() *schema.Resource {
 		},
 	}
 }
+func resolveRangeSize(rangeSize int, cidr string) (int, error) {
+	if rangeSize == 0 && cidr == "" {
+		return 0, fmt.Errorf("at least one of range_size or cidr must be set")
+	}
+	if rangeSize == 0 && cidr != "" {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid cidr %q: %v", cidr, err)
+		}
+		ones, _ := ipNet.Mask.Size()
+		return ones, nil
+	}
+	return rangeSize, nil
+}
+
 func resourceCreate(d *schema.ResourceData, meta interface{}) error {
 	config := meta.(config.Config)
 	range_size := d.Get("range_size").(int)
@@ -85,10 +102,15 @@ func resourceCreate(d *schema.ResourceData, meta interface{}) error {
 	name := d.Get("name").(string)
 	domain := d.Get("domain").(string)
 	cidr := d.Get("cidr").(string)
+
+	derived, err := resolveRangeSize(range_size, cidr)
+	if err != nil {
+		return err
+	}
+	range_size = derived
 	labels := d.Get("labels").(map[string]interface{})
 	url := fmt.Sprintf("%s/ranges", config.Url)
 	var postBody []byte
-	var err error
 	body := map[string]interface{}{
 		"range_size": range_size,
 		"name":       name,
