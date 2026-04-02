@@ -45,9 +45,9 @@ output "gke_nodes_cidr" {
 
 ```hcl
 resource "ipam_ip_range" "reserved" {
-  name       = "legacy-subnet"
-  range_size = 24
-  cidr       = "10.1.5.0/24"
+  name = "legacy-subnet"
+  cidr = "10.1.5.0/24"
+  # range_size is derived automatically from the prefix length
 }
 ```
 

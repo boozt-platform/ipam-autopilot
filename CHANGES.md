@@ -107,6 +107,11 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - Renamed `examples/sandbox-client` to `examples/sandbox-gcp-vpc` - extended with GCP VPC and subnet creation using IPAM-allocated CIDRs
 - Removed outdated examples: `simple-example`, `vpc-example`, `example-with-multiple-ranges`
 
+## Provider fixes (cont.)
+
+- Derived `range_size` from `cidr` prefix when `cidr` is set - `range_size` is now optional when `cidr` is provided; the prefix length is parsed automatically; `range_size` remains required for auto-allocation (when `cidr` is omitted)
+- Removed `range_size` workaround from `modules/ipam-network` - no longer needed now that the provider derives it
+
 ## Dockerfile hardening + lint enforcement
 
 - Switched to `gcr.io/distroless/static-debian12:nonroot` base image - runs as `nonroot` (UID 65532) by default; explicit `USER nonroot:nonroot` instruction added for clarity
