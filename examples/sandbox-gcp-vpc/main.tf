@@ -29,15 +29,15 @@ module "sandbox_network" {
   labels = { env = "sandbox" }
 
   networks = {
-    "tenant"        = { size = 16 }
-    "tenant-b"      = { size = 24 }
-    "gke-nodes"     = { size = 16, labels = { team = "sre", env = "dev" } }
-    "gke-pods"      = { size = 16 }
-    "gke-services"  = { size = 16 }
-    "mgmt"          = { size = 26 }
-    "vpn-gw"        = { size = 27 }
-    "proxy"         = { size = 28 }
-    "nat"           = { size = 28 }
+    "tenant"       = { size = 16 }
+    "tenant-b"     = { size = 24 }
+    "gke-nodes"    = { size = 16, labels = { team = "sre", env = "dev" } }
+    "gke-pods"     = { size = 16 }
+    "gke-services" = { size = 16 }
+    "mgmt"         = { size = 26 }
+    "vpn-gw"       = { size = 27 }
+    "proxy"        = { size = 28 }
+    "nat"          = { size = 28 }
   }
 }
 

@@ -20,10 +20,10 @@ output "subnets" {
   description = "Created GCP subnets keyed by network name."
   value = {
     for k, s in google_compute_subnetwork.networks : k => {
-      name       = s.name
-      cidr       = s.ip_cidr_range
-      region     = s.region
-      self_link  = s.self_link
+      name      = s.name
+      cidr      = s.ip_cidr_range
+      region    = s.region
+      self_link = s.self_link
     }
   }
 }

@@ -104,6 +104,12 @@ variable "database_deletion_protection" {
   default     = true
 }
 
+variable "db_collation" {
+  description = "The collation value."
+  type        = string
+  default     = "utf8mb3_general_ci"
+}
+
 # ── Cloud Run ──────────────────────────────────────────────────────────────────
 
 variable "cloud_run_name" {

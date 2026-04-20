@@ -37,14 +37,14 @@ resource "ipam_ip_range" "my_team" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_domain"></a> [domain](#input\_domain) | Name of the routing domain (e.g. "prod-vpc"). Represents the VPC network in IPAM. | `string` | n/a | yes |
-| <a name="input_labels"></a> [labels](#input\_labels) | Labels applied to all network blocks. Merged with per-block labels. | `map(string)` | `{}` | no |
-| <a name="input_networks"></a> [networks](#input\_networks) | Map of top-level network blocks to register. Key is the block name, value contains the prefix size and optional labels. | <pre>map(object({<br/>    size   = number<br/>    labels = optional(map(string), {})<br/>  }))</pre> | `{}` | no |
+| <a name="input_domain"></a> [domain](#input\_domain) | Routing domain definition. name is the domain identifier (e.g. "prod-vpc"); cidr is the root address space allocated to it (e.g. "10.0.0.0/8"). | <pre>object({<br/>    name = string<br/>    cidr = string<br/>  })</pre> | n/a | yes |
+| <a name="input_labels"></a> [labels](#input\_labels) | Labels applied to all resources. Per-network labels override these when set. | `map(string)` | `{}` | no |
+| <a name="input_networks"></a> [networks](#input\_networks) | Map of network blocks to carve from the domain's root CIDR. Key is the block name; size is the prefix length. labels overrides the module-level labels when set. | <pre>map(object({<br/>    size   = number<br/>    labels = optional(map(string))<br/>  }))</pre> | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_domain_id"></a> [domain\_id](#output\_domain\_id) | Routing domain ID. |
+| <a name="output_domain"></a> [domain](#output\_domain) | Routing domain details. |
 | <a name="output_networks"></a> [networks](#output\_networks) | Map of registered network blocks with their allocated CIDRs. |
 <!-- END_TF_DOCS -->

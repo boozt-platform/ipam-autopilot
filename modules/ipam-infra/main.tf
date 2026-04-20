@@ -96,15 +96,15 @@ module "mysql" {
   source  = "GoogleCloudPlatform/sql-db/google//modules/safer_mysql"
   version = "~> 28.0"
 
-  project_id       = var.project_id
-  name             = var.database_instance_name
-  database_version = var.database_version
-  region           = var.region
-  zone             = var.zone
-  tier             = var.database_tier
-  db_name          = var.database_name
-  db_collation     = "utf8_general_ci"
-  vpc_network      = data.google_compute_network.vpc.id
+  project_id         = var.project_id
+  name               = var.database_instance_name
+  database_version   = var.database_version
+  region             = var.region
+  zone               = var.zone
+  tier               = var.database_tier
+  db_name            = var.database_name
+  db_collation       = var.db_collation
+  vpc_network        = data.google_compute_network.vpc.id
   allocated_ip_range = var.cloud_sql_private_ip ? module.private_service_access[0].google_compute_global_address_name : null
 
   deletion_protection         = var.database_deletion_protection
@@ -251,6 +251,6 @@ resource "google_cloud_run_v2_service" "ipam" {
   depends_on = [
     google_project_iam_member.sql_client,
     google_project_iam_member.sql_instance_user,
-    module.mysql,  # no-op when create_database = false
+    module.mysql, # no-op when create_database = false
   ]
 }
