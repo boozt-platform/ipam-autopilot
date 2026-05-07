@@ -88,11 +88,30 @@ dev-destroy: dev-setup ## terraform destroy local dev resources
 
 ## ── Documentation ───────────────────────────────────────────────────────────
 
-docs: ## Regenerate provider docs (run from repo root)
+docs: build-provider ## Regenerate provider docs (run from repo root)
+	@SCHEMA_DIR=$$(mktemp -d) && SCHEMA=$$SCHEMA_DIR/schema.json; \
+	{ \
+	  echo 'provider_installation {'; \
+	  echo '  dev_overrides { "boozt-platform/ipam-autopilot" = "$(PROVIDER_DIR)" }'; \
+	  echo '  direct {}'; \
+	  echo '}'; \
+	} > $$SCHEMA_DIR/override.tfrc; \
+	{ \
+	  echo 'terraform {'; \
+	  echo '  required_providers {'; \
+	  echo '    ipam = { source = "boozt-platform/ipam-autopilot" }'; \
+	  echo '  }'; \
+	  echo '}'; \
+	  echo 'provider "ipam" { url = "http://localhost" }'; \
+	} > $$SCHEMA_DIR/main.tf; \
+	TF_CLI_CONFIG_FILE=$$SCHEMA_DIR/override.tfrc $(shell which tofu 2>/dev/null || which terraform 2>/dev/null) -chdir=$$SCHEMA_DIR providers schema -json > $$SCHEMA; \
+	sed -i 's|registry.opentofu.org/boozt-platform/ipam-autopilot|registry.terraform.io/hashicorp/ipam|g' $$SCHEMA; \
 	cd $(PROVIDER_DIR) && go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate \
 		--provider-name ipam \
 		--website-source-dir templates \
-		--rendered-website-dir ../docs
+		--rendered-website-dir ../docs \
+		-providers-schema $$SCHEMA; \
+	rm -rf $$SCHEMA_DIR
 
 docs-modules: ## Regenerate README.md for all Terraform modules using terraform-docs
 	@for mod in $(REPO_ROOT)/modules/*/; do \
