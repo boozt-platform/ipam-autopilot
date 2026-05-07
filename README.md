@@ -19,7 +19,7 @@ Use the `modules/ipam-infra` Terraform module to deploy the IPAM backend to GCP:
 
 ```hcl
 module "ipam" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.11.0"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.13.1"
 
   project_id      = "my-project"
   region          = "europe-west1"
@@ -64,7 +64,7 @@ terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.11"
+      version = "~> 1.13"
     }
   }
 }
@@ -74,7 +74,7 @@ provider "ipam" {
 }
 
 module "prod_network" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.11.0"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.13.1"
 
   domain = {
     name = "prod-vpc"

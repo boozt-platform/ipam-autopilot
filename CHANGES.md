@@ -7,6 +7,20 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 
 ---
 
+## ipam-infra module improvements
+
+- Added `subnetwork` variable to `modules/ipam-infra` - allows specifying a subnetwork for Cloud Run VPC access independently of the network name; defaults to the network name when not set to preserve backwards compatibility
+- Added `module_depends_on` and `module_enabled` variables to both `modules/ipam-infra` and `modules/ipam-network` - allows passing explicit external dependencies into the module and conditionally disabling resource creation
+- Added `module_id` composite output to `modules/ipam-infra` - references all key resources so callers can depend on the full module completing
+- Renamed `cloud_run_url` output to `service_url` in `modules/ipam-infra`
+- Rewrote `examples/sandbox-gcp-vpc` to create a full GCP project from scratch using `google_project` and `random_id`; covers project creation, VPC, and IPAM backend deployment
+- Added `examples/sandbox-network` - separate example that registers a VPC domain and network blocks in IPAM and creates matching GCP subnets; runs after `sandbox-gcp-vpc` using its outputs as inputs
+- Fixed plan-time `for_each` error in `modules/ipam-infra`: computed `sa_email` local statically as `"ipam-autopilot@${var.project_id}.iam.gserviceaccount.com"` instead of reading from `google_service_account.ipam.email`; moved IAM SQL user creation out of `safer_mysql` into a standalone `google_sql_user` resource so the key is not in a `for_each`
+- Added `database_edition` variable to `modules/ipam-infra` - exposes Cloud SQL edition (ENTERPRISE or ENTERPRISE_PLUS) with validation; defaults to ENTERPRISE
+- Documented post-deploy database setup requirement in `modules/ipam-infra/README.md`: `safer_mysql` creates the IAM user but does not grant database privileges; deploy order and Cloud SQL Studio GRANT steps are documented
+
+---
+
 ## Security hardening
 
 - Added input validation for all API inputs: name (max 255 chars, no empty), CIDR (host bits check, IPv4-only), range_size (1-32), labels (control characters rejected); fixed range_size=0 bypassing validation when cidr was omitted
