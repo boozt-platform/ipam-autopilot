@@ -6,7 +6,7 @@ Registers a VPC network and its top-level IP blocks in IPAM Autopilot. Creates a
 
 ```hcl
 module "prod_network" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.11.0"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.13.1"
 
   domain = "prod-vpc"
   labels = { env = "prod" }
@@ -39,6 +39,8 @@ resource "ipam_ip_range" "my_team" {
 |------|-------------|------|---------|:--------:|
 | <a name="input_domain"></a> [domain](#input\_domain) | Routing domain definition. name is the domain identifier (e.g. "prod-vpc"); cidr is the root address space allocated to it (e.g. "10.0.0.0/8"). | <pre>object({<br/>    name = string<br/>    cidr = string<br/>  })</pre> | n/a | yes |
 | <a name="input_labels"></a> [labels](#input\_labels) | Labels applied to all resources. Per-network labels override these when set. | `map(string)` | `{}` | no |
+| <a name="input_module_depends_on"></a> [module\_depends\_on](#input\_module\_depends\_on) | (Optional) A list of external resources the module depends\_on. | `any` | `[]` | no |
+| <a name="input_module_enabled"></a> [module\_enabled](#input\_module\_enabled) | (Optional) Whether to create resources within the module or not. | `bool` | `true` | no |
 | <a name="input_networks"></a> [networks](#input\_networks) | Map of network blocks to carve from the domain's root CIDR. Key is the block name; size is the prefix length. labels overrides the module-level labels when set. | <pre>map(object({<br/>    size   = number<br/>    labels = optional(map(string))<br/>  }))</pre> | `{}` | no |
 
 ## Outputs

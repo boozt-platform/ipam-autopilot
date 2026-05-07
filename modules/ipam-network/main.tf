@@ -6,8 +6,14 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
+resource "terraform_data" "module_depends_on" {
+  input = var.module_depends_on
+}
+
 resource "ipam_routing_domain" "this" {
   name = var.domain.name
+
+  depends_on = [terraform_data.module_depends_on]
 }
 
 resource "ipam_ip_range" "root" {

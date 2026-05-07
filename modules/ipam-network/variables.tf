@@ -43,3 +43,15 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "module_enabled" {
+  description = "(Optional) Whether to create resources within the module or not."
+  type        = bool
+  default     = true
+}
+
+variable "module_depends_on" {
+  description = "(Optional) A list of external resources the module depends_on."
+  type        = any
+  default     = []
+}
