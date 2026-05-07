@@ -6,7 +6,7 @@ Deploys the IPAM Autopilot backend to GCP — Cloud Run service, Cloud SQL (MySQ
 
 ```hcl
 module "ipam" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.11.0"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.13.1"
 
   project_id = "my-project"
   region     = "europe-west1"
@@ -16,6 +16,32 @@ output "ipam_url" {
   value = module.ipam.cloud_run_url
 }
 ```
+
+## Post-deploy database setup
+
+After the first `tofu apply` on a fresh Cloud SQL instance, the IPAM service account must be granted database-level privileges. The module creates the IAM user but does not run any SQL — this is intentional (see [issue](https://github.com/boozt-platform/terraform-provider-ipam-autopilot/issues/31)).
+
+**Recommended deploy order:**
+
+```
+1. tofu apply -target=module.ipam.module.mysql
+2. Grant database privileges (see below)
+3. tofu apply
+```
+
+**Grant privileges using Cloud SQL Studio** (GCP Console → Cloud SQL → your instance → Studio):
+
+Connect as a built-in user with admin rights, then run:
+
+```sql
+GRANT ALL ON `ipam`.* TO 'ipam-autopilot'@'%';
+```
+
+Replace `ipam` with your `database_name` value if changed from the default, and `ipam-autopilot` with the service account prefix if your project ID differs.
+
+The `default` user created by the module has hostname `cloudsqlproxy~%` and cannot be used in Cloud SQL Studio. Create a temporary built-in admin user via Cloud SQL Console → Users → Add user account, use it to run the GRANT, then delete it.
+
+After granting, restart or redeploy the Cloud Run service so database migrations run on the next startup.
 
 <!-- BEGIN_TF_DOCS -->
 ## Inputs
@@ -32,26 +58,31 @@ output "ipam_url" {
 | <a name="input_create_database"></a> [create\_database](#input\_create\_database) | Whether to create a new Cloud SQL instance. Set to false to use an existing instance via database\_instance\_connection\_name. | `bool` | `true` | no |
 | <a name="input_database_backup_configuration"></a> [database\_backup\_configuration](#input\_database\_backup\_configuration) | Cloud SQL backup configuration for the IPAM database. | <pre>object({<br/>    enabled                        = optional(bool, true)<br/>    binary_log_enabled             = optional(bool, true)<br/>    start_time                     = optional(string, "02:00")<br/>    location                       = optional(string, null)<br/>    transaction_log_retention_days = optional(string, "7")<br/>    retained_backups               = optional(number, 14)<br/>    retention_unit                 = optional(string, "COUNT")<br/>  })</pre> | `{}` | no |
 | <a name="input_database_deletion_protection"></a> [database\_deletion\_protection](#input\_database\_deletion\_protection) | Enable deletion protection on the Cloud SQL instance. | `bool` | `true` | no |
+| <a name="input_database_edition"></a> [database\_edition](#input\_database\_edition) | Cloud SQL edition: ENTERPRISE or ENTERPRISE\_PLUS. ENTERPRISE supports db-custom-* tiers; ENTERPRISE\_PLUS requires db-perf-optimized-N-* tiers. | `string` | `"ENTERPRISE"` | no |
 | <a name="input_database_instance_connection_name"></a> [database\_instance\_connection\_name](#input\_database\_instance\_connection\_name) | Existing Cloud SQL instance connection name (project:region:instance). Required when create\_database = false. | `string` | `null` | no |
 | <a name="input_database_instance_name"></a> [database\_instance\_name](#input\_database\_instance\_name) | Name for the Cloud SQL instance. | `string` | `"ipam-mysql"` | no |
 | <a name="input_database_name"></a> [database\_name](#input\_database\_name) | MySQL database name. | `string` | `"ipam"` | no |
-| <a name="input_database_tier"></a> [database\_tier](#input\_database\_tier) | Cloud SQL machine tier (e.g. db-f1-micro, db-n1-standard-1). | `string` | `"db-f1-micro"` | no |
+| <a name="input_database_tier"></a> [database\_tier](#input\_database\_tier) | Cloud SQL machine tier (e.g. db-f1-micro, db-custom-2-3840, db-perf-optimized-N-2). | `string` | `"db-f1-micro"` | no |
 | <a name="input_database_version"></a> [database\_version](#input\_database\_version) | MySQL version for the Cloud SQL instance (e.g. MYSQL\_8\_0, MYSQL\_8\_4). | `string` | `"MYSQL_8_4"` | no |
 | <a name="input_db_collation"></a> [db\_collation](#input\_db\_collation) | The collation value. | `string` | `"utf8mb3_general_ci"` | no |
 | <a name="input_disable_database_migration"></a> [disable\_database\_migration](#input\_disable\_database\_migration) | Set to true to skip automatic database migration on startup. | `bool` | `false` | no |
 | <a name="input_image"></a> [image](#input\_image) | Container image for the IPAM Autopilot backend. | `string` | `"ghcr.io/boozt-platform/ipam-autopilot:latest"` | no |
 | <a name="input_labels"></a> [labels](#input\_labels) | Labels to apply to all resources (Cloud Run service, Cloud SQL instance). | `map(string)` | `{}` | no |
+| <a name="input_module_depends_on"></a> [module\_depends\_on](#input\_module\_depends\_on) | (Optional) A list of external resources the module depends\_on. | `any` | `[]` | no |
+| <a name="input_module_enabled"></a> [module\_enabled](#input\_module\_enabled) | (Optional) Whether to create resources within the module or not. | `bool` | `true` | no |
 | <a name="input_network"></a> [network](#input\_network) | VPC network name or self\_link to use. Defaults to the project's default VPC. | `string` | `"default"` | no |
 | <a name="input_organization_id"></a> [organization\_id](#input\_organization\_id) | GCP organization ID used for Cloud Asset Inventory integration (IPAM\_CAI\_ORG\_ID). Leave empty to disable CAI. | `string` | `""` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | GCP project ID to deploy IPAM Autopilot into. | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | GCP region for all resources. | `string` | `"europe-west1"` | no |
+| <a name="input_subnetwork"></a> [subnetwork](#input\_subnetwork) | VPC subnetwork name to use for Cloud Run VPC access. Defaults to the network name when not set. | `string` | `null` | no |
 | <a name="input_zone"></a> [zone](#input\_zone) | GCP zone for the Cloud SQL instance (e.g. europe-west1-b). | `string` | `"europe-west1-b"` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_cloud_run_url"></a> [cloud\_run\_url](#output\_cloud\_run\_url) | IPAM Autopilot Cloud Run service URL. |
 | <a name="output_database_instance_connection_name"></a> [database\_instance\_connection\_name](#output\_database\_instance\_connection\_name) | Cloud SQL instance connection name (project:region:instance). |
+| <a name="output_module_id"></a> [module\_id](#output\_module\_id) | Composite reference to all key module resources. Reference this output to create an explicit dependency on the module completing (e.g. depends\_on = [module.ipam.module\_id]). |
 | <a name="output_service_account_email"></a> [service\_account\_email](#output\_service\_account\_email) | Service account email used by the IPAM Autopilot service. |
+| <a name="output_service_url"></a> [service\_url](#output\_service\_url) | IPAM Autopilot Cloud Run service URL. |
 <!-- END_TF_DOCS -->

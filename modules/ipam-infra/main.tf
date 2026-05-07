@@ -7,8 +7,16 @@
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 locals {
-  sa_email    = google_service_account.ipam.email
+  sa_email    = "ipam-autopilot@${var.project_id}.iam.gserviceaccount.com"
   db_instance = var.create_database ? module.mysql[0].instance_connection_name : var.database_instance_connection_name
+  # Computed statically to avoid data source timing issues when the VPC is
+  # created in the same apply as this module.
+  network_id   = "projects/${var.project_id}/global/networks/${var.network}"
+  subnetwork_name = coalesce(var.subnetwork, var.network)
+}
+
+resource "terraform_data" "module_depends_on" {
+  input = var.module_depends_on
 }
 
 # ── APIs ───────────────────────────────────────────────────────────────────────
@@ -29,11 +37,8 @@ resource "google_project_service" "apis" {
   service = each.key
 
   disable_on_destroy = false
-}
 
-data "google_compute_network" "vpc" {
-  name    = var.network
-  project = var.project_id
+  depends_on = [terraform_data.module_depends_on]
 }
 
 # ── Service Account ────────────────────────────────────────────────────────────
@@ -52,12 +57,16 @@ resource "google_project_iam_member" "sql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
   member  = "serviceAccount:${local.sa_email}"
+
+  depends_on = [google_service_account.ipam]
 }
 
 resource "google_project_iam_member" "sql_instance_user" {
   project = var.project_id
   role    = "roles/cloudsql.instanceUser"
   member  = "serviceAccount:${local.sa_email}"
+
+  depends_on = [google_service_account.ipam]
 }
 
 resource "google_organization_iam_member" "cai_viewer" {
@@ -65,6 +74,8 @@ resource "google_organization_iam_member" "cai_viewer" {
   org_id = var.organization_id
   role   = "roles/cloudasset.viewer"
   member = "serviceAccount:${local.sa_email}"
+
+  depends_on = [google_service_account.ipam]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "invoker" {
@@ -83,7 +94,7 @@ module "private_service_access" {
   source = "GoogleCloudPlatform/sql-db/google//modules/private_service_access"
 
   project_id    = var.project_id
-  vpc_network   = data.google_compute_network.vpc.name
+  vpc_network   = var.network
   prefix_length = 16
 
   depends_on = [google_project_service.apis]
@@ -105,7 +116,7 @@ module "mysql" {
   edition            = var.database_edition
   db_name            = var.database_name
   db_collation       = var.db_collation
-  vpc_network        = data.google_compute_network.vpc.id
+  vpc_network        = local.network_id
   allocated_ip_range = var.cloud_sql_private_ip ? module.private_service_access[0].google_compute_global_address_name : null
 
   deletion_protection         = var.database_deletion_protection
@@ -127,16 +138,24 @@ module "mysql" {
     },
   ]
 
-  iam_users = [
-    {
-      id    = trimsuffix(local.sa_email, ".gserviceaccount.com")
-      email = local.sa_email
-    }
-  ]
+  iam_users = []
 
   backup_configuration = var.database_backup_configuration
 
   depends_on = [module.private_service_access]
+}
+
+# Create the IAM SQL user outside safer_mysql so its key is not in a for_each,
+# which would fail at plan time when project_id is not yet known (e.g. when the
+# GCP project itself is created in the same apply).
+resource "google_sql_user" "iam_sa" {
+  count    = var.create_database ? 1 : 0
+  project  = var.project_id
+  instance = module.mysql[0].instance_name
+  name     = local.sa_email
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
+
+  depends_on = [module.mysql]
 }
 
 # ── Cloud Run v2 ───────────────────────────────────────────────────────────────
@@ -162,7 +181,8 @@ resource "google_cloud_run_v2_service" "ipam" {
       content {
         egress = "PRIVATE_RANGES_ONLY"
         network_interfaces {
-          network = data.google_compute_network.vpc.name
+          network    = var.network
+          subnetwork = local.subnetwork_name
         }
       }
     }

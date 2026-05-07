@@ -6,13 +6,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-mock_provider "google" {
-  mock_data "google_compute_network" {
-    defaults = {
-      id = "projects/test-project/global/networks/default"
-    }
-  }
-}
+mock_provider "google" {}
 
 # google-beta is used internally by some GoogleCloudPlatform modules
 mock_provider "google-beta" {}
@@ -219,5 +213,34 @@ run "private_service_access_skipped_without_private_ip" {
   assert {
     condition     = length(module.private_service_access) == 0
     error_message = "Should skip private service access when cloud_sql_private_ip=false."
+  }
+}
+
+# ── Subnetwork ────────────────────────────────────────────────────────────────
+
+run "subnetwork_defaults_to_network_name" {
+  command = plan
+
+  variables {
+    cloud_sql_private_ip = true
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.ipam.template[0].vpc_access[0].network_interfaces[0].subnetwork == google_cloud_run_v2_service.ipam.template[0].vpc_access[0].network_interfaces[0].network
+    error_message = "subnetwork should default to the network name when not set."
+  }
+}
+
+run "subnetwork_explicit_value_used" {
+  command = plan
+
+  variables {
+    cloud_sql_private_ip = true
+    subnetwork           = "my-custom-subnet"
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.ipam.template[0].vpc_access[0].network_interfaces[0].subnetwork == "my-custom-subnet"
+    error_message = "subnetwork should use the explicitly provided value."
   }
 }
