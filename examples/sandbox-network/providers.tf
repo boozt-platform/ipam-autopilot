@@ -15,7 +15,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 1.15"
+      version = "~> 7.26"
     }
     ipam = {
       source  = "boozt-platform/ipam-autopilot"

@@ -131,10 +131,10 @@ update-version: ## Update all version references (usage: make update-version VER
 		-not -path "*/.git/*" \
 		| xargs perl -pi -e \
 		's|\?ref=v[0-9]+\.[0-9]+\.[0-9]+|?ref=$(VERSION)|g'
-	@# Update provider version constraint only in files that reference boozt-platform/ipam-autopilot
+	@# Update provider version constraint only in the ipam-autopilot provider block
 	@grep -rl 'boozt-platform/ipam-autopilot' $(REPO_ROOT) \
 		--include="*.tf" --include="*.md" --include="*.md.tmpl" \
 		--exclude-dir=".terraform" --exclude-dir=".git" \
-		| xargs perl -pi -e \
-		's|version = "~> [0-9]+\.[0-9]+"|version = "~> $(MINOR)"|g'
+		| xargs perl -0777 -pi -e \
+		's|(source\s*=\s*"boozt-platform/ipam-autopilot"[^}]*?version\s*=\s*)"~> [0-9]+\.[0-9]+"|\1"~> $(MINOR)"|gs'
 	@echo "Done. Run 'make docs && make docs-modules' to regenerate docs."
