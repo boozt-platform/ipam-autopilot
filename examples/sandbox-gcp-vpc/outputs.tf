@@ -6,24 +6,13 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-output "domain" {
-  description = "IPAM routing domain details."
-  value       = module.sandbox_network.domain
+output "project_id" {
+  description = "Created GCP project ID."
+  value       = google_project.sandbox.project_id
 }
 
-output "networks" {
-  description = "IPAM-allocated network blocks with their CIDRs."
-  value       = module.sandbox_network.networks
+output "ipam_url" {
+  description = "IPAM Autopilot Cloud Run service URL."
+  value       = module.ipam.service_url
 }
 
-output "subnets" {
-  description = "Created GCP subnets keyed by network name."
-  value = {
-    for k, s in google_compute_subnetwork.networks : k => {
-      name      = s.name
-      cidr      = s.ip_cidr_range
-      region    = s.region
-      self_link = s.self_link
-    }
-  }
-}

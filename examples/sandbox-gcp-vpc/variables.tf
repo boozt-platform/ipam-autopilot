@@ -6,18 +6,32 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-variable "ipam_url" {
-  description = "URL of the deployed IPAM Autopilot Cloud Run service (from examples/infra output)."
+variable "billing_account" {
+  description = "GCP billing account ID to associate with the new project (e.g. 012345-ABCDEF-012345)."
   type        = string
 }
 
-variable "project_id" {
-  description = "GCP project ID to create the VPC and subnets in."
+variable "org_id" {
+  description = "GCP organization ID under which the sandbox project will be created."
   type        = string
+  default     = null
 }
 
 variable "region" {
-  description = "GCP region for the subnets."
+  description = "GCP region for all resources."
   type        = string
   default     = "europe-west1"
 }
+
+variable "zone" {
+  description = "GCP zone for the Cloud SQL instance."
+  type        = string
+  default     = "europe-west1-b"
+}
+
+variable "folder_id" {
+  description = "GCP folder ID under which the sandbox project will be created (optional)."
+  type        = string
+  default     = null
+}
+

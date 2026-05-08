@@ -6,13 +6,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-mock_provider "google" {
-  mock_data "google_compute_network" {
-    defaults = {
-      id = "projects/test-project/global/networks/default"
-    }
-  }
-}
+mock_provider "google" {}
 
 # google-beta is used internally by some GoogleCloudPlatform modules
 mock_provider "google-beta" {}
@@ -34,8 +28,30 @@ run "enables_required_apis" {
       "cloudasset.googleapis.com",
       "sqladmin.googleapis.com",
       "servicenetworking.googleapis.com",
+      "secretmanager.googleapis.com",
     ])
-    error_message = "Should enable exactly the 6 required GCP APIs."
+    error_message = "Should enable 7 required GCP APIs (secretmanager included when create_database=true)."
+  }
+}
+
+run "enables_required_apis_without_database" {
+  command = plan
+
+  variables {
+    create_database                   = false
+    database_instance_connection_name = "test-project:europe-west1:existing-ipam"
+  }
+
+  assert {
+    condition = toset(keys(google_project_service.apis)) == toset([
+      "iam.googleapis.com",
+      "run.googleapis.com",
+      "compute.googleapis.com",
+      "cloudasset.googleapis.com",
+      "sqladmin.googleapis.com",
+      "servicenetworking.googleapis.com",
+    ])
+    error_message = "Should enable 6 APIs (no secretmanager) when create_database=false."
   }
 }
 
@@ -196,28 +212,165 @@ run "database_edition_invalid_value_rejected" {
 
 # ── Private Service Access ────────────────────────────────────────────────────
 
-run "private_service_access_created_with_private_ip" {
+run "private_service_access_created_when_database_created" {
   command = plan
 
-  variables {
-    cloud_sql_private_ip = true
+  assert {
+    condition     = length(google_compute_global_address.private_service_access) == 1
+    error_message = "Should create PSA global address when create_database=true."
   }
 
   assert {
-    condition     = length(module.private_service_access) == 1
-    error_message = "Should create private service access when cloud_sql_private_ip=true."
+    condition     = length(google_service_networking_connection.private_service_access) == 1
+    error_message = "Should create service networking connection when create_database=true."
   }
 }
 
-run "private_service_access_skipped_without_private_ip" {
+run "private_service_access_skipped_without_database" {
   command = plan
 
   variables {
-    cloud_sql_private_ip = false
+    create_database                   = false
+    database_instance_connection_name = "test-project:europe-west1:existing-ipam"
   }
 
   assert {
-    condition     = length(module.private_service_access) == 0
-    error_message = "Should skip private service access when cloud_sql_private_ip=false."
+    condition     = length(google_compute_global_address.private_service_access) == 0
+    error_message = "Should skip PSA global address when create_database=false."
+  }
+
+  assert {
+    condition     = length(google_service_networking_connection.private_service_access) == 0
+    error_message = "Should skip service networking connection when create_database=false."
+  }
+}
+
+# ── Subnetwork ────────────────────────────────────────────────────────────────
+
+run "subnetwork_defaults_to_network_name" {
+  command = plan
+
+  assert {
+    condition     = google_cloud_run_v2_service.ipam.template[0].vpc_access[0].network_interfaces[0].subnetwork == google_cloud_run_v2_service.ipam.template[0].vpc_access[0].network_interfaces[0].network
+    error_message = "subnetwork should default to the network name when not set."
+  }
+}
+
+run "subnetwork_explicit_value_used" {
+  command = plan
+
+  variables {
+    subnetwork = "my-custom-subnet"
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.ipam.template[0].vpc_access[0].network_interfaces[0].subnetwork == "my-custom-subnet"
+    error_message = "subnetwork should use the explicitly provided value."
+  }
+}
+
+# ── Database GRANT job ────────────────────────────────────────────────────────
+
+run "db_grant_resources_created_with_database" {
+  command = plan
+
+  assert {
+    condition     = length(google_service_account.db_setup) == 1
+    error_message = "Should create db_setup service account when create_database=true."
+  }
+
+  assert {
+    condition     = google_service_account.db_setup[0].account_id == "ipam-db-setup"
+    error_message = "db_setup service account ID should be ipam-db-setup."
+  }
+
+  assert {
+    condition     = length(google_secret_manager_secret.db_default_password) == 1
+    error_message = "Should create Secret Manager secret when create_database=true."
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_job.db_grant) == 1
+    error_message = "Should create db_grant Cloud Run Job when create_database=true."
+  }
+}
+
+run "db_grant_resources_skipped_without_database" {
+  command = plan
+
+  variables {
+    create_database                   = false
+    database_instance_connection_name = "test-project:europe-west1:existing-ipam"
+  }
+
+  assert {
+    condition     = length(google_service_account.db_setup) == 0
+    error_message = "Should not create db_setup service account when create_database=false."
+  }
+
+  assert {
+    condition     = length(google_secret_manager_secret.db_default_password) == 0
+    error_message = "Should not create Secret Manager secret when create_database=false."
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_job.db_grant) == 0
+    error_message = "Should not create db_grant Cloud Run Job when create_database=false."
+  }
+}
+
+run "db_grant_job_name_includes_cloud_run_name" {
+  command = plan
+
+  variables {
+    cloud_run_name = "my-ipam"
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_job.db_grant[0].name == "my-ipam-db-grant"
+    error_message = "db_grant job name should be <cloud_run_name>-db-grant."
+  }
+}
+
+run "db_grant_job_always_uses_vpc_access" {
+  command = plan
+
+  variables {
+    subnetwork = "my-subnet"
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_job.db_grant[0].template[0].template[0].vpc_access) == 1
+    error_message = "db_grant job should always have VPC access (database is always private)."
+  }
+}
+
+run "cloud_run_no_vpc_access_when_existing_db_public" {
+  command = plan
+
+  variables {
+    create_database                   = false
+    database_instance_connection_name = "test-project:europe-west1:existing-ipam"
+    cloud_run_direct_vpc              = false
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.ipam.template[0].vpc_access) == 0
+    error_message = "Cloud Run should have no VPC access when create_database=false and cloud_run_direct_vpc=false."
+  }
+}
+
+run "cloud_run_vpc_access_when_existing_db_private" {
+  command = plan
+
+  variables {
+    create_database                   = false
+    database_instance_connection_name = "test-project:europe-west1:existing-ipam"
+    cloud_run_direct_vpc              = true
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.ipam.template[0].vpc_access) == 1
+    error_message = "Cloud Run should have VPC access when create_database=false and cloud_run_direct_vpc=true."
   }
 }

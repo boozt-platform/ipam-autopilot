@@ -48,8 +48,14 @@ variable "network" {
   default     = "default"
 }
 
-variable "cloud_sql_private_ip" {
-  description = "Use private IP for Cloud SQL. Requires VPC peering with servicenetworking. Recommended for production."
+variable "subnetwork" {
+  description = "VPC subnetwork name to use for Cloud Run VPC access. Defaults to the network name when not set."
+  type        = string
+  default     = null
+}
+
+variable "cloud_run_direct_vpc" {
+  description = "Connect Cloud Run to the VPC using Direct VPC egress. Required when the Cloud SQL instance is on a private IP. Only relevant when create_database = false; when create_database = true the database is always private and Direct VPC is always enabled."
   type        = bool
   default     = true
 }
@@ -189,6 +195,20 @@ variable "disable_database_migration" {
   description = "Set to true to skip automatic database migration on startup."
   type        = bool
   default     = false
+}
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+
+variable "module_enabled" {
+  description = "(Optional) Whether to create resources within the module or not."
+  type        = bool
+  default     = true
+}
+
+variable "module_depends_on" {
+  description = "(Optional) A list of external resources the module depends_on."
+  type        = any
+  default     = []
 }
 
 # ── Labels ─────────────────────────────────────────────────────────────────────

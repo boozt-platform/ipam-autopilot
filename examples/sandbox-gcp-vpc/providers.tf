@@ -6,34 +6,28 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-# Prerequisites: run examples/infra first to deploy the IPAM service, then
-# set ipam_url to the Cloud Run URL from its output:
-#   cd ../sandbox && tofu output ipam_url
-#
-# Authentication: the provider uses Google Application Default Credentials to
-# obtain an identity token with the Cloud Run service URL as audience.
-# Run `gcloud auth application-default login` before applying.
-# For CI/CD set IPAM_IDENTITY_TOKEN to a valid Google identity token.
+# Prerequisites:
+#   - gcloud auth application-default login
+#   - Billing account and organization ID
 
 terraform {
   required_version = ">= 1.7"
   required_providers {
-    ipam = {
-      source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.11"
-    }
     google = {
       source  = "hashicorp/google"
-      version = "~> 1.11"
+      version = "~> 7.26"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.8"
     }
   }
 }
 
-provider "ipam" {
-  url = var.ipam_url
+provider "google" {
+  region = var.region
 }
 
-provider "google" {
-  project = var.project_id
-  region  = var.region
+provider "google-beta" {
+  region = var.region
 }

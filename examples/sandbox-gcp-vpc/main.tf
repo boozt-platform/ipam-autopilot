@@ -6,57 +6,73 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-# Example: reserve IP ranges in IPAM then create matching GCP VPC subnets.
+# Sandbox example: creates a new GCP project and deploys the IPAM backend.
+# After applying, use examples/sandbox-network to register address space.
 #
-# Deploy the IPAM service first:
-#   cd ../infra && tofu apply
-#
-# Then apply this example:
 #   tofu init
 #   tofu apply \
-#     -var="ipam_url=$(cd ../infra && tofu output -raw ipam_url)" \
-#     -var="project_id=<your-project>"
+#     -var="billing_account=<BILLING_ACCOUNT_ID>" \
+#     -var="org_id=<ORG_ID>"
 
-# ── IPAM: reserve address space ───────────────────────────────────────────────
+# ── Project ───────────────────────────────────────────────────────────────────
 
-module "sandbox_network" {
-  source = "../../modules/ipam-network"
+resource "random_id" "project_suffix" {
+  byte_length = 4
+}
 
-  domain = {
-    name = "sandbox-vpc"
-    cidr = "10.0.0.0/8"
-  }
+resource "google_project" "sandbox" {
+  name            = "ipam-sandbox"
+  project_id      = "ipam-sandbox-${random_id.project_suffix.hex}"
+  org_id          = var.folder_id == null ? var.org_id : null
+  folder_id       = var.folder_id
+  billing_account = var.billing_account
+  deletion_policy = "DELETE"
+}
+
+# ── IPAM backend ──────────────────────────────────────────────────────────────
+
+module "ipam" {
+  source = "../../modules/ipam-infra"
+
+  project_id = google_project.sandbox.project_id
+  region     = var.region
+  zone       = var.zone
+  network    = google_compute_network.sandbox.name
+  subnetwork = google_compute_subnetwork.ipam.name
+
+  image                           = "docker.io/booztpl/ipam-autopilot:latest"
+  cloud_run_allow_unauthenticated = true
+  cloud_run_ingress               = "INGRESS_TRAFFIC_ALL"
+  database_deletion_protection    = false
+  database_tier                   = "db-g1-small"
+
   labels = { env = "sandbox" }
 
-  networks = {
-    "tenant"       = { size = 16 }
-    "tenant-b"     = { size = 24 }
-    "gke-nodes"    = { size = 16, labels = { team = "sre", env = "dev" } }
-    "gke-pods"     = { size = 16 }
-    "gke-services" = { size = 16 }
-    "mgmt"         = { size = 26 }
-    "vpn-gw"       = { size = 27 }
-    "proxy"        = { size = 28 }
-    "nat"          = { size = 28 }
-  }
+  module_depends_on = [google_project.sandbox.project_id]
 }
 
-# ── GCP: VPC ──────────────────────────────────────────────────────────────────
+# ── APIs (needed before VPC creation) ────────────────────────────────────────
+
+resource "google_project_service" "compute" {
+  project            = google_project.sandbox.project_id
+  service            = "compute.googleapis.com"
+  disable_on_destroy = false
+}
+
+# ── VPC ───────────────────────────────────────────────────────────────────────
 
 resource "google_compute_network" "sandbox" {
-  project                 = var.project_id
+  project                 = google_project.sandbox.project_id
   name                    = "sandbox-vpc"
   auto_create_subnetworks = false
+
+  depends_on = [google_project_service.compute]
 }
 
-# ── GCP: subnets — CIDRs come from IPAM ──────────────────────────────────────
-
-resource "google_compute_subnetwork" "networks" {
-  for_each = module.sandbox_network.networks
-
-  project       = var.project_id
+resource "google_compute_subnetwork" "ipam" {
+  project       = google_project.sandbox.project_id
   region        = var.region
   network       = google_compute_network.sandbox.id
-  name          = each.value.name
-  ip_cidr_range = each.value.cidr
+  name          = "ipam"
+  ip_cidr_range = "10.255.0.0/24"
 }

@@ -6,7 +6,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-output "cloud_run_url" {
+output "service_url" {
   description = "IPAM Autopilot Cloud Run service URL."
   value       = google_cloud_run_v2_service.ipam.uri
 }
@@ -19,4 +19,13 @@ output "service_account_email" {
 output "database_instance_connection_name" {
   description = "Cloud SQL instance connection name (project:region:instance)."
   value       = local.db_instance
+}
+
+output "module_id" {
+  description = "Composite reference to all key module resources. Reference this output to create an explicit dependency on the module completing (e.g. depends_on = [module.ipam.module_id])."
+  value = {
+    service_url    = google_cloud_run_v2_service.ipam.uri
+    sa_email       = google_service_account.ipam.email
+    db_connection  = local.db_instance
+  }
 }

@@ -6,9 +6,17 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
+# Prerequisites:
+#   - IPAM backend deployed (see examples/sandbox-gcp-vpc)
+#   - gcloud auth application-default login
+
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.7"
   required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.26"
+    }
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
       version = "~> 1.13"
@@ -16,3 +24,11 @@ terraform {
   }
 }
 
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+provider "ipam" {
+  url = var.ipam_url
+}
