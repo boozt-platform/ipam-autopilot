@@ -54,8 +54,8 @@ variable "subnetwork" {
   default     = null
 }
 
-variable "cloud_sql_private_ip" {
-  description = "Use private IP for Cloud SQL. Requires VPC peering with servicenetworking. Recommended for production."
+variable "cloud_run_direct_vpc" {
+  description = "Connect Cloud Run to the VPC using Direct VPC egress. Required when the Cloud SQL instance is on a private IP. Only relevant when create_database = false; when create_database = true the database is always private and Direct VPC is always enabled."
   type        = bool
   default     = true
 }

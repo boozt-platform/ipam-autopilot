@@ -18,6 +18,11 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - Fixed plan-time `for_each` error in `modules/ipam-infra`: computed `sa_email` local statically as `"ipam-autopilot@${var.project_id}.iam.gserviceaccount.com"` instead of reading from `google_service_account.ipam.email`; moved IAM SQL user creation out of `safer_mysql` into a standalone `google_sql_user` resource so the key is not in a `for_each`
 - Added `database_edition` variable to `modules/ipam-infra` - exposes Cloud SQL edition (ENTERPRISE or ENTERPRISE_PLUS) with validation; defaults to ENTERPRISE
 - Documented post-deploy database setup requirement in `modules/ipam-infra/README.md`: `safer_mysql` creates the IAM user but does not grant database privileges; deploy order and Cloud SQL Studio GRANT steps are documented
+- Replaced private_service_access submodule with inline google_compute_global_address and google_service_networking_connection resources to avoid plan-time data source failure in fresh GCP projects where the VPC does not yet exist
+- Replaced cloud_sql_private_ip variable with cloud_run_direct_vpc: Cloud SQL is always private when create_database = true (enforced by safer_mysql); the new variable only applies when create_database = false and controls whether Cloud Run uses Direct VPC egress to reach an existing private database instance
+- PSA and Cloud SQL Auth Proxy --private-ip are now unconditional when create_database = true; Cloud Run Direct VPC and --private-ip are conditional on cloud_run_direct_vpc when create_database = false
+- Added sandbox-gcp-vpc folder_id variable and fixed google_project to accept either org_id or folder_id (GCP rejects both simultaneously)
+- Documented GCP 1-2 hour serverless-ipv4-* address release delay in modules/ipam-infra/README.md with recommended teardown procedure for sandbox setups
 
 ---
 

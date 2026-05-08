@@ -19,29 +19,46 @@ output "ipam_url" {
 
 ## Post-deploy database setup
 
-After the first `tofu apply` on a fresh Cloud SQL instance, the IPAM service account must be granted database-level privileges. The module creates the IAM user but does not run any SQL — this is intentional (see [issue](https://github.com/boozt-platform/terraform-provider-ipam-autopilot/issues/31)).
+The module automatically grants the minimum required MySQL privileges to the IPAM service account via a one-off Cloud Run Job (`<cloud_run_name>-db-grant`). This job runs during `tofu apply` via a `local-exec` provisioner after the Cloud SQL instance and the IAM user are created.
 
-**Recommended deploy order:**
+The GRANT job uses a dedicated `ipam-db-setup` service account that reads the `default` MySQL superuser password from Secret Manager. The IPAM application service account never has superuser credentials.
 
-```
-1. tofu apply -target=module.ipam.module.mysql
-2. Grant database privileges (see below)
-3. tofu apply
-```
-
-**Grant privileges using Cloud SQL Studio** (GCP Console → Cloud SQL → your instance → Studio):
-
-Connect as a built-in user with admin rights, then run:
+The job applies the following minimum privileges required for schema migrations and runtime:
 
 ```sql
-GRANT ALL ON `ipam`.* TO 'ipam-autopilot'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, LOCK TABLES, REFERENCES ON ipam.* TO 'ipam-autopilot'@'%';
 ```
 
-Replace `ipam` with your `database_name` value if changed from the default, and `ipam-autopilot` with the service account prefix if your project ID differs.
+### Requirements for the Terraform executor
 
-The `default` user created by the module has hostname `cloudsqlproxy~%` and cannot be used in Cloud SQL Studio. Create a temporary built-in admin user via Cloud SQL Console → Users → Add user account, use it to run the GRANT, then delete it.
+The machine (or CI/CD runner) running `tofu apply` must have:
 
-After granting, restart or redeploy the Cloud Run service so database migrations run on the next startup.
+- `gcloud` CLI installed and authenticated as a principal with `roles/run.developer` (or `run.jobs.run`) on the project
+- Network access to the Cloud Run Jobs API (`run.googleapis.com`)
+
+### Re-running the GRANT
+
+The job re-runs automatically when the privilege set changes — the GRANT SQL is hashed into `triggers_replace` on a `terraform_data` resource. Updating to a new module version that adds privileges triggers a re-run on the next `tofu apply`.
+
+To force a re-run manually without changing the GRANT:
+
+```bash
+tofu apply -replace='module.ipam.terraform_data.run_db_grant[0]'
+```
+
+## Destroying infrastructure with cloud_sql_private_ip = true
+
+When `cloud_sql_private_ip = true`, Cloud Run uses Direct VPC egress, which causes GCP to create a `serverless-ipv4-*` internal address reservation in the subnetwork. GCP releases this reservation asynchronously — per GCP documentation this can take up to 1-2 hours after the Cloud Run service is deleted. If you attempt to delete the subnetwork within that window, Terraform will fail with `resourceInUseByAnotherResource`.
+
+This only affects configurations where the subnetwork is in the same Terraform state as the module. The recommended pattern for production is to manage networking (VPC, subnets) in a separate state from the IPAM module — in that case, `tofu destroy` on the module does not touch the subnet and the issue does not arise.
+
+For sandbox or single-state setups, the safest teardown is to delete the entire project:
+
+```bash
+gcloud projects delete <project-id>
+```
+
+Project deletion bypasses all resource-level reservation checks and completes immediately.
 
 <!-- BEGIN_TF_DOCS -->
 ## Inputs
@@ -50,10 +67,10 @@ After granting, restart or redeploy the Cloud Run service so database migrations
 |------|-------------|------|---------|:--------:|
 | <a name="input_cloud_run_allow_unauthenticated"></a> [cloud\_run\_allow\_unauthenticated](#input\_cloud\_run\_allow\_unauthenticated) | Allow unauthenticated (public) access to the Cloud Run service. Enable only for testing/sandbox; production should use IAM-authenticated callers. | `bool` | `false` | no |
 | <a name="input_cloud_run_deletion_protection"></a> [cloud\_run\_deletion\_protection](#input\_cloud\_run\_deletion\_protection) | Enable deletion protection on the Cloud Run service. | `bool` | `false` | no |
+| <a name="input_cloud_run_direct_vpc"></a> [cloud\_run\_direct\_vpc](#input\_cloud\_run\_direct\_vpc) | Connect Cloud Run to the VPC using Direct VPC egress. Required when the Cloud SQL instance is on a private IP. Only relevant when create\_database = false; when create\_database = true the database is always private and Direct VPC is always enabled. | `bool` | `true` | no |
 | <a name="input_cloud_run_ingress"></a> [cloud\_run\_ingress](#input\_cloud\_run\_ingress) | Cloud Run ingress setting. One of: INGRESS\_TRAFFIC\_ALL, INGRESS\_TRAFFIC\_INTERNAL\_ONLY, INGRESS\_TRAFFIC\_INTERNAL\_LOAD\_BALANCER. | `string` | `"INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"` | no |
 | <a name="input_cloud_run_max_instances"></a> [cloud\_run\_max\_instances](#input\_cloud\_run\_max\_instances) | Maximum number of Cloud Run instances. | `number` | `10` | no |
 | <a name="input_cloud_run_name"></a> [cloud\_run\_name](#input\_cloud\_run\_name) | Name for the Cloud Run service. | `string` | `"ipam"` | no |
-| <a name="input_cloud_sql_private_ip"></a> [cloud\_sql\_private\_ip](#input\_cloud\_sql\_private\_ip) | Use private IP for Cloud SQL. Requires VPC peering with servicenetworking. Recommended for production. | `bool` | `true` | no |
 | <a name="input_cloud_sql_proxy_image"></a> [cloud\_sql\_proxy\_image](#input\_cloud\_sql\_proxy\_image) | Cloud SQL Auth Proxy container image. Pin to a specific version for production stability. | `string` | `"gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.21.2"` | no |
 | <a name="input_create_database"></a> [create\_database](#input\_create\_database) | Whether to create a new Cloud SQL instance. Set to false to use an existing instance via database\_instance\_connection\_name. | `bool` | `true` | no |
 | <a name="input_database_backup_configuration"></a> [database\_backup\_configuration](#input\_database\_backup\_configuration) | Cloud SQL backup configuration for the IPAM database. | <pre>object({<br/>    enabled                        = optional(bool, true)<br/>    binary_log_enabled             = optional(bool, true)<br/>    start_time                     = optional(string, "02:00")<br/>    location                       = optional(string, null)<br/>    transaction_log_retention_days = optional(string, "7")<br/>    retained_backups               = optional(number, 14)<br/>    retention_unit                 = optional(string, "COUNT")<br/>  })</pre> | `{}` | no |
