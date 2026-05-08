@@ -105,7 +105,7 @@ docs: build-provider ## Regenerate provider docs (run from repo root)
 	  echo 'provider "ipam" { url = "http://localhost" }'; \
 	} > $$SCHEMA_DIR/main.tf; \
 	TF_CLI_CONFIG_FILE=$$SCHEMA_DIR/override.tfrc $(shell which tofu 2>/dev/null || which terraform 2>/dev/null) -chdir=$$SCHEMA_DIR providers schema -json > $$SCHEMA; \
-	sed -i 's|registry.opentofu.org/boozt-platform/ipam-autopilot|registry.terraform.io/hashicorp/ipam|g' $$SCHEMA; \
+	perl -pi -e 's|registry.opentofu.org/boozt-platform/ipam-autopilot|registry.terraform.io/hashicorp/ipam|g' $$SCHEMA; \
 	cd $(PROVIDER_DIR) && go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate \
 		--provider-name ipam \
 		--website-source-dir templates \
