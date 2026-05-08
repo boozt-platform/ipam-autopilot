@@ -6,7 +6,7 @@ Registers a VPC network and its top-level IP blocks in IPAM Autopilot. Creates a
 
 ```hcl
 module "prod_network" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.13.1"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-network?ref=v1.15.0"
 
   domain = "prod-vpc"
   labels = { env = "prod" }

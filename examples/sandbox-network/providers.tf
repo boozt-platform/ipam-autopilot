@@ -19,7 +19,7 @@ terraform {
     }
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.13"
+      version = "~> 1.15"
     }
   }
 }

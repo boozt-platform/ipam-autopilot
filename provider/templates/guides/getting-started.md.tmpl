@@ -14,14 +14,14 @@ Use the `modules/ipam-infra` module from the [boozt-platform/ipam-autopilot](htt
 
 ```hcl
 module "ipam" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.13.1"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.15.0"
 
   project_id = "my-gcp-project"
   region     = "europe-west1"
 }
 
 output "ipam_url" {
-  value = module.ipam.cloud_run_url
+  value = module.ipam.service_url
 }
 ```
 
@@ -34,7 +34,7 @@ terraform {
   required_providers {
     ipam = {
       source  = "boozt-platform/ipam-autopilot"
-      version = "~> 1.13"
+      version = "~> 1.15"
     }
   }
 }

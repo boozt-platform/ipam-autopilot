@@ -6,7 +6,7 @@ Deploys the IPAM Autopilot backend to GCP — Cloud Run service, Cloud SQL (MySQ
 
 ```hcl
 module "ipam" {
-  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.13.1"
+  source = "github.com/boozt-platform/ipam-autopilot//modules/ipam-infra?ref=v1.15.0"
 
   project_id = "my-project"
   region     = "europe-west1"
