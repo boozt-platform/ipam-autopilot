@@ -170,6 +170,10 @@ Original source: https://github.com/GoogleCloudPlatform/professional-services/tr
 - Removed `ForceNew` from `labels` in `ipam_ip_range` provider resource - label changes now trigger an in-place update instead of destroy+recreate
 - Added `resourceUpdate` to Terraform provider - calls `PUT /ranges/:id` with the new labels map
 
+## Bug fixes
+
+- Fixed `google_secret_manager_secret` replication mode in `modules/ipam-infra` - changed from `auto {}` (global replication) to `user_managed` with a single replica in `var.region`; required for GCP organizations with `constraints/gcp.resourceLocations` org policy that restricts resource creation to specific regions
+
 ## Provider documentation
 
 - Added `provider/docs/` - OpenTofu registry-compatible documentation generated via `terraform-plugin-docs`; covers provider index, `ipam_ip_range` resource, `ipam_routing_domain` resource, `ipam_ip_range` data source, and a getting-started guide

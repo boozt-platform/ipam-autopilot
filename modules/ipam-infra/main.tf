@@ -219,7 +219,11 @@ resource "google_secret_manager_secret" "db_default_password" {
   secret_id = "${var.database_instance_name}-setup-password"
 
   replication {
-    auto {}
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
   }
 
   depends_on = [google_project_service.apis]
