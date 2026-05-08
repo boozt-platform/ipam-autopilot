@@ -76,7 +76,7 @@ For a full working example see [`examples/sandbox-network`](./examples/sandbox-n
 - [Getting started guide](./docs/guides/getting-started.md): authentication, provider setup, first allocation
 - [`modules/ipam-infra`](./modules/ipam-infra): all backend module variables and outputs
 - [`modules/ipam-network`](./modules/ipam-network): all network module variables and outputs
-- [Terraform provider registry](https://registry.terraform.io/providers/boozt-platform/ipam-autopilot/latest/docs): provider resources and data sources
+- [OpenTofu registry](https://search.opentofu.org/provider/boozt-platform/ipam-autopilot/latest): provider resources and data sources
 
 ---
 
