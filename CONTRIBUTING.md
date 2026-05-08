@@ -4,17 +4,17 @@
 
 | Path | What it is |
 |---|---|
-| `container/` | Go backend — Fiber HTTP server, MySQL, Cloud Asset Inventory |
+| `container/` | Go backend: Fiber HTTP server, MySQL, Cloud Asset Inventory |
 | `provider/` | Terraform/OpenTofu provider (terraform-plugin-sdk v2) |
-| `modules/ipam-infra/` | Terraform module — deploys backend to GCP (Cloud Run + Cloud SQL) |
-| `modules/ipam-network/` | Terraform module — registers a VPC domain and network blocks |
+| `modules/ipam-infra/` | Terraform module: deploys backend to GCP (Cloud Run + Cloud SQL) |
+| `modules/ipam-network/` | Terraform module: registers a VPC domain and network blocks |
 | `examples/` | Working usage examples |
-| `docs/` | Generated provider docs (OpenTofu registry format) — do not edit directly |
-| `provider/templates/` | Source templates for `docs/` — edit these, not `docs/` |
+| `docs/` | Generated provider docs (OpenTofu registry format). Do not edit directly. |
+| `provider/templates/` | Source templates for `docs/`. Edit these, not `docs/`. |
 
 ## Dev environment
 
-The easiest way is to open the repo in VS Code — the [devcontainer](./.devcontainer) includes Go, OpenTofu, golangci-lint, hadolint, terraform-docs, and gcloud.
+The easiest way is to open the repo in VS Code. The [devcontainer](./.devcontainer) includes Go, OpenTofu, golangci-lint, hadolint, terraform-docs, and gcloud.
 
 For manual setup you need: Go 1.22+, OpenTofu or Terraform, Docker, golangci-lint, hadolint.
 
@@ -54,11 +54,11 @@ make dev-destroy  # tears it down
 
 ```bash
 make test                # Go unit tests (container + provider) + HCL module tests
-make test-integration    # integration tests via testcontainers — requires Docker
+make test-integration    # integration tests via testcontainers (requires Docker)
 make test-modules        # HCL unit tests only, using locally built provider binary
 ```
 
-HCL module tests live in `modules/*/tests/unit_test.tftest.hcl`. They always run against the locally built provider binary — never the published registry version. Do not run `tofu test` directly in a module directory without the dev override.
+HCL module tests live in `modules/*/tests/unit_test.tftest.hcl`. They always run against the locally built provider binary, not the published registry version. Do not run `tofu test` directly in a module directory without the dev override.
 
 Write or update tests for every change before running the gate.
 
@@ -68,7 +68,7 @@ Write or update tests for every change before running the gate.
 make check
 ```
 
-Runs lint (golangci-lint + hadolint) + format (gofmt) + tests + build + docs. Fix every failure before committing — do not suppress linter warnings without a documented reason.
+Runs lint (golangci-lint + hadolint) + format (gofmt) + tests + build + docs. Fix every failure before committing. Do not suppress linter warnings without a documented reason.
 
 ## Commit conventions
 
