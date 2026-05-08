@@ -21,11 +21,12 @@ resource "random_id" "project_suffix" {
 }
 
 resource "google_project" "sandbox" {
-  name              = "ipam-sandbox"
-  project_id        = "ipam-sandbox-${random_id.project_suffix.hex}"
-  org_id            = var.org_id
-  billing_account   = var.billing_account
-  deletion_policy   = "DELETE"
+  name            = "ipam-sandbox"
+  project_id      = "ipam-sandbox-${random_id.project_suffix.hex}"
+  org_id          = var.folder_id == null ? var.org_id : null
+  folder_id       = var.folder_id
+  billing_account = var.billing_account
+  deletion_policy = "DELETE"
 }
 
 # ── IPAM backend ──────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ variable "billing_account" {
 variable "org_id" {
   description = "GCP organization ID under which the sandbox project will be created."
   type        = string
+  default     = null
 }
 
 variable "region" {
@@ -27,3 +28,10 @@ variable "zone" {
   type        = string
   default     = "europe-west1-b"
 }
+
+variable "folder_id" {
+  description = "GCP folder ID under which the sandbox project will be created (optional)."
+  type        = string
+  default     = null
+}
+
