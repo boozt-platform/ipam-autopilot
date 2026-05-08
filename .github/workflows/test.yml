@@ -9,6 +9,16 @@
 name: Test
 "on":
   pull_request:
+    paths:
+      - "container/**"
+      - "provider/**"
+      - "modules/**"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".github/workflows/test.yml"
 
 jobs:
   lint:
