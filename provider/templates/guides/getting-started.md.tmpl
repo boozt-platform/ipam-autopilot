@@ -21,7 +21,7 @@ module "ipam" {
 }
 
 output "ipam_url" {
-  value = module.ipam.cloud_run_url
+  value = module.ipam.service_url
 }
 ```
 
